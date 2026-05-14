@@ -1,0 +1,7 @@
+{
+    "paths": {
+      "aml_data": "../ibm-transactions-for-anti-money-laundering-aml", 
+      "model_to_load": "./models/pretrained_model.pt",
+      "model_to_save": "./models/trained_model.pt"
+    }
+  }

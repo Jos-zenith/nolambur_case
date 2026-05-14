@@ -1,0 +1,178 @@
+{
+  "datasets": {
+    "ibm_aml": {
+      "name": "IBM AML Transactions",
+      "description": "High-quality AML dataset for learning general mule topology patterns",
+      "variants": {
+        "HI-Large": {
+          "path": "ibm-transactions-for-anti-money-laundering-aml/HI-Large",
+          "accounts": "HI-Large_accounts.csv",
+          "transactions": "HI-Large_Trans.csv",
+          "patterns": "HI-Large_Patterns.txt",
+          "features": ["Amount Received", "Timestamp", "Payment Format", "Received Currency"],
+          "illicit_ratio_pct": "High",
+          "description": "Large illicit networks"
+        },
+        "HI-Medium": {
+          "path": "ibm-transactions-for-anti-money-laundering-aml/HI-Medium",
+          "accounts": "HI-Medium_accounts.csv",
+          "transactions": "HI-Medium_Trans.csv",
+          "patterns": "HI-Medium_Patterns.txt",
+          "features": ["Amount Received", "Timestamp", "Payment Format", "Received Currency"],
+          "illicit_ratio_pct": "High",
+          "description": "Medium illicit networks"
+        },
+        "HI-Small": {
+          "path": "ibm-transactions-for-anti-money-laundering-aml/HI-Small",
+          "accounts": "HI-Small_accounts.csv",
+          "transactions": "HI-Small_Trans.csv",
+          "patterns": "HI-Small_Patterns.txt",
+          "features": ["Amount Received", "Timestamp", "Payment Format", "Received Currency"],
+          "illicit_ratio_pct": "High",
+          "description": "Small illicit networks"
+        },
+        "LI-Large": {
+          "path": "ibm-transactions-for-anti-money-laundering-aml/LI-Large",
+          "accounts": "LI-Large_accounts.csv",
+          "transactions": "LI-Large_Trans.csv",
+          "patterns": "LI-Large_Patterns.txt",
+          "features": ["Amount Received", "Timestamp", "Payment Format", "Received Currency"],
+          "illicit_ratio_pct": "Low",
+          "description": "Large, low-illicit networks"
+        }
+      },
+      "topology_focus": [
+        "Mule account detection",
+        "Transaction flow patterns",
+        "Layering detection",
+        "Placement patterns"
+      ]
+    },
+    "nolambur": {
+      "name": "Nolambur Dataset",
+      "description": "Specific Tamil Nadu fraud pattern dataset focused on ₹5L burst + geographic mismatch",
+      "path": "Multi-GNN/",
+      "files": {
+        "accounts": "nolambur_accounts.csv",
+        "transactions": "nolambur_transactions.csv",
+        "stats": "nolambur_stats.json"
+      },
+      "features": ["Amount", "Timestamp", "Source State", "Destination State"],
+      "fraud_characteristics": {
+        "burst_pattern": "₹500,000 transfers",
+        "temporal_window": "Concentrated in short timeframe",
+        "geo_mismatch": {
+          "source": ["Tamil Nadu"],
+          "destinations": ["Uttarakhand", "Rajasthan", "Delhi", "Haryana", "Haridwar"]
+        },
+        "account_stats": {
+          "mule_accounts": 43,
+          "victim_accounts": 6,
+          "total_accounts": 549,
+          "total_transactions": 4840,
+          "fraud_transactions": 40,
+          "illicit_ratio_pct": 0.8264
+        }
+      },
+      "topology_focus": [
+        "Burst detection (large amount in short time)",
+        "Geographic anomalies (state-to-state mismatch)",
+        "Account velocity (rapid fund movement)",
+        "Mule account characteristics"
+      ]
+    }
+  },
+  "training_stages": {
+    "pretrain": {
+      "name": "Pretraining on IBM AML",
+      "dataset": "ibm_aml",
+      "dataset_variant": "HI-Large",
+      "epochs": 100,
+      "patience": 10,
+      "learning_rate_factor": 1.0,
+      "goal": "Learn general mule topology, transaction patterns, and payment format anomalies",
+      "evaluation_metric": "F1-score (weighted for class imbalance)"
+    },
+    "finetune": {
+      "name": "Fine-tuning on Nolambur",
+      "dataset": "nolambur",
+      "epochs": 50,
+      "patience": 8,
+      "learning_rate_factor": 0.1,
+      "goal": "Specialize in ₹5L burst patterns and Tamil Nadu→Haridwar geographic mismatch",
+      "evaluation_metric": "F1-score (detect specific fraud pattern)",
+      "notes": [
+        "Use lower learning rate to preserve pretrained features",
+        "Reduce epochs since task is more specialized",
+        "Early stopping helps avoid overfitting to small dataset"
+      ]
+    }
+  },
+  "model_configurations": {
+    "gin": {
+      "architecture": "Graph Isomorphism Network with edge updates",
+      "hyperparameters": {
+        "n_hidden": 66,
+        "n_gnn_layers": 2,
+        "dropout": 0.01,
+        "final_dropout": 0.1,
+        "lr": 0.006
+      }
+    },
+    "gat": {
+      "architecture": "Graph Attention Network",
+      "hyperparameters": {
+        "n_hidden": 64,
+        "n_heads": 4,
+        "n_gnn_layers": 2,
+        "dropout": 0.009,
+        "final_dropout": 0.1,
+        "lr": 0.006
+      }
+    },
+    "pna": {
+      "architecture": "Principal Neighborhood Aggregation",
+      "hyperparameters": {
+        "n_hidden": 20,
+        "n_gnn_layers": 2,
+        "dropout": 0.08,
+        "final_dropout": 0.29,
+        "lr": 0.0006
+      }
+    }
+  },
+  "transfer_learning_strategy": {
+    "description": "How features transfer from IBM pretraining to Nolambur fine-tuning",
+    "layer_freezing": {
+      "enabled": false,
+      "note": "Train all layers with reduced LR instead of freezing"
+    },
+    "feature_preservation": {
+      "node_embeddings": "Keep learning mule topology features from IBM",
+      "edge_features": "Adapt to Nolambur transaction patterns",
+      "attention_heads": "Reuse learned attention patterns"
+    },
+    "learning_rate_schedule": {
+      "pretrain": "Standard Adam optimizer",
+      "finetune": "0.1x pretrain LR to prevent catastrophic forgetting"
+    }
+  },
+  "evaluation": {
+    "pretrain_metrics": [
+      "F1-score on IBM test set",
+      "Mule detection accuracy",
+      "False positive rate"
+    ],
+    "finetune_metrics": [
+      "F1-score on Nolambur test set",
+      "₹5L burst pattern detection",
+      "Geographic mismatch detection",
+      "Mule account classification"
+    ],
+    "transfer_quality": [
+      "Compare finetune F1 vs pretrain F1",
+      "Check for knowledge transfer vs random init",
+      "Analyze attention weights for pattern similarity"
+    ]
+  }
+}

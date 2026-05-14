@@ -1,0 +1,34 @@
+{
+  "os":  "Windows-11-10.0.26200-SP0",
+  "python":  "CPython 3.12.10",
+  "startedAt":  "2026-05-14T20:08:10.140196Z",
+  "args":  [
+    "--epochs",
+    "2",
+    "--batch-size",
+    "256"
+  ],
+  "program":  "D:\\betty\\cyber\\fraud-detection-system\\Multi-GNN\\pretrain_finetune.py",
+  "codePath":  "pretrain_finetune.py",
+  "codePathLocal":  "pretrain_finetune.py",
+  "git":  {
+    "remote":  "https://github.com/IBM/Multi-GNN.git",
+    "commit":  "252b0252afca109d1d216c411c59ff70753b25fc"
+  },
+  "email":  "zenithjoshua.27it@licet.ac.in",
+  "root":  "D:\\betty\\cyber\\fraud-detection-system\\Multi-GNN",
+  "host":  "DESKTOP-TV1J24N",
+  "executable":  "C:\\Users\\Zenith Joshua\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+  "cpu_count":  10,
+  "cpu_count_logical":  12,
+  "disk":  {
+    "/":  {
+      "total":  "511423016960",
+      "used":  "130159239168"
+    }
+  },
+  "memory":  {
+    "total":  "16908926976"
+  },
+  "writerId":  "0yey5ze4x7d9hlx1m3mbesdax19wt87n"
+}

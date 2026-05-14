@@ -1,0 +1,550 @@
+account_id,vpa,state,bank,role,is_mule
+db6e078e-7f2,aji0y6dp@ybl,Tamil Nadu,SBI,victim,0
+1175d2fb-cc9,ivuzzpqk@ybl,Tamil Nadu,BOB,victim,0
+d6a9a633-5ca,zmf8mdd4@paytm,Tamil Nadu,BOB,victim,0
+da315726-456,0t9nt3w5@okaxis,Tamil Nadu,PNB,victim,0
+f7982aa6-df8,bikcidkw@upi,Tamil Nadu,HDFC,victim,0
+40c797bc-53e,myzycwti@axl,Tamil Nadu,Axis,victim,0
+8a87cb9e-052,9xuy41ib@upi,Rajasthan,Axis,l1_mule,1
+cfb89590-9fa,c6uzhr5x@oksbi,Rajasthan,ICICI,l1_mule,1
+5a5897dd-aca,iujv6oh9@icici,Uttarakhand,Axis,l1_mule,1
+6890c077-652,14ffyvnv@axl,Uttarakhand,Kotak,l1_mule,1
+265d56de-027,84azytjx@ibl,Rajasthan,ICICI,l1_mule,1
+4e1490f5-c9d,fazz81sd@paytm,Rajasthan,BOB,l1_mule,1
+f0016135-2e5,f1t2tala@upi,Uttarakhand,BOB,l1_mule,1
+33371112-6be,iiuc039t@oksbi,Rajasthan,HDFC,l1_mule,1
+c75f720c-459,8fsv871y@paytm,Haryana,Axis,l2_mule,1
+c6d317fa-e88,pseimvih@ibl,Delhi,PNB,l2_mule,1
+3c438fde-668,i64ciyhe@axl,Uttarakhand,HDFC,l2_mule,1
+a50ba087-5e9,3gdppq0y@ibl,Haryana,SBI,l2_mule,1
+dd73d947-4f8,02dgtfgq@ibl,Haryana,Axis,l2_mule,1
+c672a0f6-187,b94874fr@okaxis,Uttarakhand,BOB,l2_mule,1
+ad5a9dd1-44e,6fao72kz@icici,Haryana,PNB,l2_mule,1
+1124eace-ee0,fk8ut0cv@icici,Haryana,BOB,l2_mule,1
+a0f1b798-634,cs4cc5o7@okaxis,Rajasthan,Kotak,l2_mule,1
+dbf67a95-a45,wpvs7hzi@apl,Uttarakhand,HDFC,l2_mule,1
+afd46ca6-b46,q77awudt@icici,Delhi,ICICI,l2_mule,1
+e6517933-f12,755nf4zw@icici,Rajasthan,SBI,l2_mule,1
+b8440b01-2ef,7d5j60fk@okaxis,Delhi,PNB,l2_mule,1
+080daaa8-b85,hwjr64dp@paytm,Delhi,SBI,l2_mule,1
+22f8660b-d64,me9fpzue@oksbi,Uttarakhand,Kotak,l2_mule,1
+2337c244-4c7,4ufel624@upi,Uttarakhand,HDFC,l2_mule,1
+8df07eb4-97b,ymu5907i@oksbi,Rajasthan,BOB,l2_mule,1
+f30e1220-aaa,5a0l7253@paytm,Rajasthan,HDFC,l2_mule,1
+7c8a04be-21c,nbqh7m35@okaxis,Uttarakhand,SBI,l2_mule,1
+8c278df4-37b,okc1msy4@upi,Rajasthan,SBI,l2_mule,1
+339b321f-064,5ju9bvm2@apl,Uttarakhand,Kotak,l2_mule,1
+7ad6092b-73c,nujza7tz@okaxis,Uttarakhand,ICICI,l2_mule,1
+713caec7-2b3,cxll4zkl@apl,Haryana,ICICI,l2_mule,1
+617d2fa0-121,ztgxn0gu@apl,Haryana,Kotak,l2_mule,1
+9a82c173-9ec,kh2vlpys@oksbi,Uttarakhand,PNB,l2_mule,1
+1dd6272e-5f4,kxwd8il3@oksbi,Uttarakhand,SBI,l2_mule,1
+dd7ccb45-d3a,ir4cowgz@axl,Uttarakhand,Axis,l2_mule,1
+40d3e7ae-38e,fy6452h2@icici,Rajasthan,Axis,l2_mule,1
+fc0b2843-c26,u7eeqtul@axl,Uttarakhand,Kotak,l2_mule,1
+582fb345-e27,3t60rjiw@icici,Haryana,Axis,l2_mule,1
+d5663e35-245,jckjltei@oksbi,Rajasthan,PNB,l2_mule,1
+6fc723ac-953,cotohp6v@ybl,Rajasthan,BOB,l2_mule,1
+f2601e0f-0a7,r7ko64t0@okaxis,Haryana,Axis,l2_mule,1
+71a62def-85f,jrny2047@icici,Rajasthan,SBI,l2_mule,1
+6211bd7e-897,vxdp5gjl@axl,Haryana,ICICI,l2_mule,1
+cb737bb3-638,1n13jcat@upi,Maharashtra,HDFC,clean,0
+72e6b18a-a53,c8bbi4wi@axl,Gujarat,PNB,clean,0
+3097941d-05e,uhz1gv0e@oksbi,Tamil Nadu,ICICI,clean,0
+1c4fe2d7-dac,u7u6n7hv@okaxis,Tamil Nadu,SBI,clean,0
+3be433cf-adf,14ve92mp@upi,Gujarat,SBI,clean,0
+fc297e6e-aa8,xaprpn6q@oksbi,Kerala,Axis,clean,0
+6434509b-398,08j3trp0@paytm,Karnataka,ICICI,clean,0
+bdef7217-228,i7kq1uym@axl,West Bengal,BOB,clean,0
+835cb61e-36d,gh2m5zja@okaxis,Maharashtra,SBI,clean,0
+c1059074-ebc,zr1yxr2d@okaxis,Karnataka,Axis,clean,0
+2474cb36-956,ixntm9tm@axl,Gujarat,ICICI,clean,0
+f0c058e9-79c,jeget1gh@axl,Maharashtra,ICICI,clean,0
+10199d03-28f,v1v93kmk@icici,Gujarat,HDFC,clean,0
+4f51dace-926,bbk7w1da@paytm,Maharashtra,Axis,clean,0
+1ff47666-0e3,pgb7r3oc@ybl,Telangana,HDFC,clean,0
+83febe55-d55,38diuovw@icici,Karnataka,Axis,clean,0
+09e9b54f-d22,6kvpuc8d@okaxis,Telangana,PNB,clean,0
+56227fb1-a5a,jcitfoyq@ybl,Karnataka,HDFC,clean,0
+5d610321-34c,zzqy72wx@okaxis,Maharashtra,Axis,clean,0
+ac541769-490,tx63cfl0@paytm,Tamil Nadu,Axis,clean,0
+9097f736-c0b,qkojtpv6@upi,Tamil Nadu,Kotak,clean,0
+143b620b-637,aiy4va13@ybl,Maharashtra,BOB,clean,0
+b85df010-58f,gspk9p38@axl,West Bengal,ICICI,clean,0
+d20ed545-b8a,ly4lyk83@icici,Telangana,SBI,clean,0
+ebe017d3-bb6,dje153a5@axl,Telangana,Axis,clean,0
+61e9276c-1e5,gn1w1ht7@axl,Tamil Nadu,PNB,clean,0
+afcf7781-db7,e9vifttd@ibl,Telangana,Axis,clean,0
+8a77df8c-2c4,xf7kzorq@axl,Tamil Nadu,Kotak,clean,0
+0c084f0a-36d,n7s55j2o@icici,Karnataka,ICICI,clean,0
+8029a269-faa,a04ux5qr@upi,West Bengal,Kotak,clean,0
+109f1976-af5,tqlgzui1@ybl,West Bengal,ICICI,clean,0
+05a7b3f0-2b3,r6n92xf8@oksbi,Gujarat,Kotak,clean,0
+c6d92344-f08,ld4d6af5@oksbi,Kerala,SBI,clean,0
+92c5bab8-7ba,2jwoclyt@upi,Telangana,PNB,clean,0
+58346645-d7d,5rtwiyki@ibl,Gujarat,Axis,clean,0
+58478899-90d,1zdfkblc@upi,Tamil Nadu,ICICI,clean,0
+5b67e48a-456,ftu2gc5w@okaxis,Telangana,Axis,clean,0
+51114166-54e,fqjja26y@oksbi,Kerala,SBI,clean,0
+5e7722a1-6f3,89k8yqk9@axl,Telangana,SBI,clean,0
+e74929a0-019,nmkza3oa@ybl,Karnataka,Kotak,clean,0
+e85bb9a0-574,r6k2vmww@oksbi,Gujarat,PNB,clean,0
+2966c875-264,6xlpu0dk@apl,Tamil Nadu,HDFC,clean,0
+e4ac4b23-0d3,et8t63j3@axl,Karnataka,BOB,clean,0
+d2acd40e-25c,0me8f840@apl,Maharashtra,BOB,clean,0
+f8265746-bc4,udojen0j@apl,West Bengal,BOB,clean,0
+cc9a4f84-3ff,7dia5u6h@ibl,Gujarat,PNB,clean,0
+8ebd5aae-250,qzxebb9e@okaxis,West Bengal,Kotak,clean,0
+b38f2bd8-1fb,nn8ztv05@ibl,Karnataka,BOB,clean,0
+79bd47f7-d48,w7kyhqin@upi,Telangana,Kotak,clean,0
+686a9e6d-c61,moge4qxx@ybl,Gujarat,SBI,clean,0
+56581c10-823,m92h3tv3@okaxis,West Bengal,ICICI,clean,0
+0ab1b956-6ec,f6a4fejg@ybl,West Bengal,HDFC,clean,0
+242b4c68-da5,m2vajepe@ibl,Tamil Nadu,Axis,clean,0
+bd9e7438-8f4,2sds8b25@icici,Telangana,ICICI,clean,0
+1f77595a-0f7,xb94pdzp@ibl,Telangana,ICICI,clean,0
+93ff3503-d85,fewvznvk@icici,Kerala,Kotak,clean,0
+d5b7dcd0-c5f,dz4x1zhq@okaxis,Telangana,Axis,clean,0
+1c00950a-235,3o0llj8y@axl,Maharashtra,SBI,clean,0
+cf3db828-3cc,3dd03uvu@upi,Tamil Nadu,PNB,clean,0
+a0f35ea4-53a,o57p6bkl@ibl,Tamil Nadu,Kotak,clean,0
+5830f07f-146,hxid4n1u@apl,Kerala,BOB,clean,0
+dd8493a4-c29,93wxa73j@oksbi,Kerala,ICICI,clean,0
+cf96bd32-f7f,17mgfxc0@ybl,Gujarat,SBI,clean,0
+e3cbc039-81c,tnqfll7v@ybl,Gujarat,HDFC,clean,0
+328ed257-23e,1bcppvoh@icici,Karnataka,SBI,clean,0
+4f1e5710-28e,pkyrybov@ybl,Maharashtra,HDFC,clean,0
+c1a2cc6d-cfd,811kerpe@icici,Maharashtra,PNB,clean,0
+6a3a3aa8-5af,s43c5ba7@upi,Karnataka,Kotak,clean,0
+05950436-fc1,uzpeal2w@upi,Telangana,SBI,clean,0
+3f8344dd-51d,4ivsolml@oksbi,Telangana,SBI,clean,0
+34f68cde-274,wtg1m8xf@ibl,Kerala,HDFC,clean,0
+3f7eef17-fe8,hv1xg1r1@axl,Maharashtra,PNB,clean,0
+879bbcd2-e77,x9l8lpqw@paytm,Kerala,Kotak,clean,0
+8afc3470-686,mcqbnkx9@ibl,Tamil Nadu,Kotak,clean,0
+730141f1-80f,sqt26q3x@upi,Kerala,Kotak,clean,0
+f92d00fe-76e,s8q349dx@ybl,Telangana,HDFC,clean,0
+ac7006a0-31d,ppsfnkom@ybl,Gujarat,BOB,clean,0
+952171cb-bbd,xcdyk0x6@oksbi,Gujarat,ICICI,clean,0
+713db7ca-950,ufm8zov7@paytm,Tamil Nadu,Kotak,clean,0
+1f77ec31-a37,xlez896d@apl,Telangana,Kotak,clean,0
+f6b9e535-824,al8m1g9f@paytm,Maharashtra,BOB,clean,0
+2174d2e7-76b,d145bm1e@apl,West Bengal,HDFC,clean,0
+9552ed81-97b,gyw6zbnz@axl,Karnataka,Kotak,clean,0
+2a541c5a-adb,12ii826g@axl,Maharashtra,Axis,clean,0
+1d7f27e2-928,kns832ej@axl,West Bengal,BOB,clean,0
+e33499ff-738,td44k1j6@oksbi,Maharashtra,BOB,clean,0
+5cbf8094-1fa,d6357oon@apl,Telangana,SBI,clean,0
+9749e680-bdd,ildzmfb7@axl,Maharashtra,PNB,clean,0
+8eb3737e-59f,ezqacj4t@icici,West Bengal,Axis,clean,0
+078dcd14-8a1,1ieixwc4@axl,Tamil Nadu,Kotak,clean,0
+66abea7e-d1b,asifpwio@ibl,Kerala,Kotak,clean,0
+5ff36244-509,css9toqw@upi,Maharashtra,ICICI,clean,0
+956dfb24-447,a2m0w10l@ybl,Gujarat,ICICI,clean,0
+10c50102-d01,mx3y9rge@axl,Kerala,SBI,clean,0
+61c41a5e-2b8,h25llo3r@ybl,Maharashtra,BOB,clean,0
+0b265512-1b8,gm25len6@axl,Gujarat,Axis,clean,0
+5df013ac-e29,9rr7s20c@oksbi,Maharashtra,Kotak,clean,0
+f3fd02cd-2f8,lcxlvpym@ybl,Maharashtra,PNB,clean,0
+8e6b6450-5a7,6wpx2cyo@icici,West Bengal,BOB,clean,0
+0b17743a-244,y8fv2bc2@upi,Gujarat,ICICI,clean,0
+96c75168-b52,8bfqnpce@upi,Telangana,Axis,clean,0
+7c49cd93-294,xie0rnuj@paytm,Maharashtra,PNB,clean,0
+4c9f3ceb-6e3,hwy9hecg@axl,Telangana,SBI,clean,0
+c2a29e5d-a8f,y4lmct64@oksbi,West Bengal,BOB,clean,0
+d6c059ff-a09,sehe2atn@icici,Maharashtra,HDFC,clean,0
+1731ed06-891,5cozroou@oksbi,Kerala,ICICI,clean,0
+3efd782c-6ec,cqse3tv1@oksbi,Gujarat,Axis,clean,0
+db593e75-f7b,6befflzm@icici,Kerala,ICICI,clean,0
+b6a72442-d1f,ch8jwwdx@oksbi,West Bengal,HDFC,clean,0
+6ac34a96-9d8,w6m7b5c8@paytm,Gujarat,PNB,clean,0
+0051a9ea-fd9,1oxrwk8r@apl,Karnataka,ICICI,clean,0
+e917e480-79b,ccprhvlz@upi,Telangana,Axis,clean,0
+98401e57-609,1sdieqfb@apl,Karnataka,BOB,clean,0
+6443ed3b-45a,p8637zgf@icici,Kerala,Axis,clean,0
+dfee9bf2-48b,5rdoqivb@paytm,Telangana,Axis,clean,0
+23c3bfdf-dc6,5xqt4p50@apl,Kerala,ICICI,clean,0
+7eebd174-73c,ouhtcs1k@ibl,Tamil Nadu,HDFC,clean,0
+6cafa98d-8f3,o2m71hss@ybl,Tamil Nadu,SBI,clean,0
+f4ac893c-cd3,z2sf6f7l@apl,Karnataka,Kotak,clean,0
+955c4234-bff,4vssrura@upi,Gujarat,PNB,clean,0
+d55a6885-690,9v20yar8@okaxis,Tamil Nadu,PNB,clean,0
+baf6a88b-8a5,vgww4fyb@ibl,Tamil Nadu,HDFC,clean,0
+27cf6e96-b10,ppohswq4@ybl,Tamil Nadu,PNB,clean,0
+7a8c6645-05a,su9rn8qt@icici,Karnataka,ICICI,clean,0
+855b24d8-016,1zxyvgiu@okaxis,Gujarat,ICICI,clean,0
+d5592af3-889,khzlm72j@ibl,West Bengal,Kotak,clean,0
+593dec67-5f5,t6om1fb8@ibl,Gujarat,ICICI,clean,0
+58d8b5c6-ef9,x0h3jujd@okaxis,Telangana,HDFC,clean,0
+9637a7ac-2e7,ytwbozd1@ybl,Tamil Nadu,Kotak,clean,0
+08de2ce8-4d4,o75rh8lx@ibl,Karnataka,PNB,clean,0
+a3267200-292,i04b7p47@ybl,Kerala,BOB,clean,0
+95960706-af3,2g05kbkv@upi,Telangana,ICICI,clean,0
+2dc01c43-46d,9tr74qge@oksbi,Telangana,PNB,clean,0
+32a05e88-18a,xzamkygv@apl,Telangana,BOB,clean,0
+f4e28f71-353,sdygflij@okaxis,Telangana,Axis,clean,0
+77509db0-051,jluujmiy@axl,West Bengal,ICICI,clean,0
+eafa0ae5-1d9,os6zle6k@okaxis,Karnataka,HDFC,clean,0
+1b4f813a-e5e,rq9nz612@okaxis,Karnataka,BOB,clean,0
+659a844c-450,yv2stn7e@icici,Karnataka,Kotak,clean,0
+168777e2-a06,uflsehud@icici,Karnataka,Axis,clean,0
+c8d44d0a-2c5,ceouuyla@paytm,West Bengal,BOB,clean,0
+43852731-753,0ubmc97c@axl,Tamil Nadu,SBI,clean,0
+84e5cbf1-b6a,o119xp9n@apl,Maharashtra,Axis,clean,0
+7c6e58d5-652,yxtxmgtt@okaxis,Tamil Nadu,BOB,clean,0
+10d15b04-d6f,19qzpniq@oksbi,Tamil Nadu,ICICI,clean,0
+d87ecdc6-34f,70e3p15a@okaxis,Karnataka,SBI,clean,0
+6254431b-8f0,vqy5ibpt@ybl,Tamil Nadu,HDFC,clean,0
+8752282f-7ab,9i6uu13i@oksbi,Kerala,PNB,clean,0
+d4d7921f-c09,hkc856wp@axl,Kerala,SBI,clean,0
+075bde03-879,7y2lofn1@axl,Maharashtra,HDFC,clean,0
+69d84931-b15,i4fqcoot@apl,West Bengal,HDFC,clean,0
+5db7e9f0-084,hx74d0gj@ybl,Maharashtra,BOB,clean,0
+d0c45167-d84,g10ur5l8@ybl,Tamil Nadu,HDFC,clean,0
+ab4ef148-113,8e9rivh6@icici,Karnataka,ICICI,clean,0
+96141255-6de,kqxlm5q2@axl,West Bengal,BOB,clean,0
+0232feb6-0e5,lhlb50at@apl,West Bengal,ICICI,clean,0
+ac812895-0f0,hiuit7m1@axl,Karnataka,PNB,clean,0
+1c02f161-954,0q0mftg6@ybl,Gujarat,Kotak,clean,0
+165a3feb-cd2,4c3baewc@oksbi,Tamil Nadu,SBI,clean,0
+2981fe0d-fe0,snwywrra@icici,Karnataka,Axis,clean,0
+bd9daf6b-41d,aztkszp7@oksbi,Tamil Nadu,SBI,clean,0
+76415f9b-a77,siwjm2c8@axl,Tamil Nadu,Kotak,clean,0
+e541dc70-08b,9iy4x41d@apl,Karnataka,Axis,clean,0
+fa697d18-cd8,rwzc4xl9@ibl,Kerala,Kotak,clean,0
+f03c391e-8f7,i6yuj7yk@icici,Tamil Nadu,Kotak,clean,0
+60eb54ed-9d1,b7l8v1zo@ibl,Gujarat,ICICI,clean,0
+0dc94cab-d16,uu4ytn02@ibl,Karnataka,Kotak,clean,0
+2e0f0c6a-2ee,9bp4m18o@upi,Gujarat,SBI,clean,0
+4a9e6a11-177,j9rm7pyx@ibl,Gujarat,BOB,clean,0
+1c3c8bbe-fc6,kicjn2fo@upi,Kerala,SBI,clean,0
+5a7a5884-b49,almjegqt@apl,Tamil Nadu,SBI,clean,0
+9e8d1dde-c69,dtv25ao2@icici,Tamil Nadu,HDFC,clean,0
+333e6ba7-55b,sygjjfgj@paytm,Kerala,Axis,clean,0
+92a1d000-b37,cjiwvhdk@apl,West Bengal,ICICI,clean,0
+52515f9c-046,w2lm349e@upi,West Bengal,Kotak,clean,0
+2eca5bfe-dc2,hl88kzru@okaxis,Gujarat,ICICI,clean,0
+917fb905-ca8,k2n7h9g1@ybl,Telangana,PNB,clean,0
+dac36c42-184,7h23c42y@oksbi,Telangana,PNB,clean,0
+9e2471db-695,ixz2c9ro@icici,Maharashtra,BOB,clean,0
+080f17ae-0d9,pb8z3v6d@okaxis,Gujarat,PNB,clean,0
+59117312-cf3,mxb9yo18@apl,Gujarat,SBI,clean,0
+ea03df36-47b,dh0uyhnq@icici,Tamil Nadu,HDFC,clean,0
+c9d13a46-21b,9rk7d30m@upi,Maharashtra,Axis,clean,0
+8b84e2d0-e1e,hrrpzlk3@ibl,West Bengal,SBI,clean,0
+05beb72c-5c8,md270stl@apl,West Bengal,Axis,clean,0
+c1eb9500-3af,2wgxo05q@apl,Karnataka,Axis,clean,0
+227ab300-e54,zh13cd5g@upi,Tamil Nadu,HDFC,clean,0
+ae9b4688-14f,eyr8lnoe@upi,Telangana,BOB,clean,0
+0d7b14ce-3fb,w3zkwdee@paytm,Telangana,SBI,clean,0
+1afaa772-d85,nfnvuprt@oksbi,Karnataka,Kotak,clean,0
+a2a8bd54-d6e,rflqbmae@apl,Karnataka,Kotak,clean,0
+150b1c69-9d5,xorzpgu2@okaxis,Kerala,ICICI,clean,0
+f43f6c1a-19d,jtgq01te@ibl,Tamil Nadu,ICICI,clean,0
+cdc97255-ace,t9t11php@okaxis,West Bengal,ICICI,clean,0
+292ebd50-376,9qm3p91i@upi,West Bengal,BOB,clean,0
+10888114-863,vpw232ut@icici,Gujarat,HDFC,clean,0
+c9b6fdb8-698,9ku8s63e@apl,Maharashtra,SBI,clean,0
+9bc82871-9c1,5e5iz31y@axl,Maharashtra,HDFC,clean,0
+0d6872fa-a63,wwnc21o0@upi,Kerala,Axis,clean,0
+b9b04561-3db,la100qxm@ibl,Telangana,BOB,clean,0
+d9bc569f-b59,o83rlkte@axl,Kerala,BOB,clean,0
+69e6f60e-2f1,61bw4a7f@axl,Maharashtra,SBI,clean,0
+855c736c-1a1,hyexf7jx@paytm,Telangana,SBI,clean,0
+76fbf235-4af,xxbw01pd@ibl,Maharashtra,SBI,clean,0
+75d4c470-c88,reiyaz39@apl,Karnataka,PNB,clean,0
+b8fa8960-47b,rid3dnkn@oksbi,Karnataka,PNB,clean,0
+c8a9e7b7-950,ftaxp0wf@apl,Gujarat,Kotak,clean,0
+a9ee26ae-49a,ph6fe0mp@oksbi,Gujarat,HDFC,clean,0
+4fddfea1-8cf,xivzk7a4@paytm,Maharashtra,HDFC,clean,0
+9d6a6b21-955,vgox22in@okaxis,Kerala,Axis,clean,0
+6ffdcb98-a38,vt997e4u@upi,Gujarat,Kotak,clean,0
+9226d90b-2a1,gq9cvah7@apl,Gujarat,Kotak,clean,0
+06c76465-950,wsozctwj@paytm,Maharashtra,SBI,clean,0
+dff63398-c9e,79flv1xx@paytm,Kerala,PNB,clean,0
+35f93717-d6d,04cdpqvl@oksbi,Telangana,SBI,clean,0
+7844cc4a-374,zzf8s2zg@oksbi,Tamil Nadu,PNB,clean,0
+86246ac8-756,50e6mpsj@ibl,West Bengal,Axis,clean,0
+b39346ac-8d2,sb4gf16y@ibl,Telangana,HDFC,clean,0
+ffdb076f-e40,sb5iqnf7@ybl,Gujarat,Kotak,clean,0
+d72284a1-243,60plozjc@upi,West Bengal,SBI,clean,0
+0adcc0b2-719,ybisbo55@paytm,Kerala,ICICI,clean,0
+c57bb97d-993,tahukwqv@axl,Tamil Nadu,BOB,clean,0
+e6db924d-173,h61iaoim@ybl,West Bengal,ICICI,clean,0
+3e215a9e-0c6,1n0lh9p8@oksbi,Tamil Nadu,PNB,clean,0
+d020762f-d26,d76szn9d@ibl,Maharashtra,Kotak,clean,0
+be18dda5-608,wovcxek4@apl,Karnataka,PNB,clean,0
+cab331dd-0d9,0ljch2vf@oksbi,West Bengal,Axis,clean,0
+876e2b47-793,lem1qq4d@paytm,Telangana,BOB,clean,0
+37226f2a-c4f,zb4ldims@paytm,Gujarat,ICICI,clean,0
+45a62da6-105,9boq0iq2@oksbi,West Bengal,SBI,clean,0
+e4f996dd-100,c2ihoy7d@paytm,Tamil Nadu,BOB,clean,0
+fe6486c9-5e6,ac6pe63l@ybl,Tamil Nadu,Axis,clean,0
+b3e30a41-88d,gu3obygh@oksbi,Tamil Nadu,ICICI,clean,0
+26cdf408-d84,qfwwxr5r@ibl,Maharashtra,ICICI,clean,0
+988a62ef-895,eh5sw229@upi,Telangana,Axis,clean,0
+42174022-e10,2muljavb@paytm,Kerala,SBI,clean,0
+95e891ca-aea,9t199dxj@ybl,West Bengal,BOB,clean,0
+388edc83-947,u9n79gil@upi,Karnataka,Kotak,clean,0
+62a8adae-998,zmuf8438@icici,Tamil Nadu,ICICI,clean,0
+ecf41fd7-09b,rdihsa7h@oksbi,Karnataka,ICICI,clean,0
+ad809e95-47e,g25cfzfd@icici,Gujarat,BOB,clean,0
+91e08ce9-3ec,8n7odkef@apl,Maharashtra,BOB,clean,0
+958464e8-619,8xg8y72i@oksbi,Gujarat,Axis,clean,0
+deda1626-f82,0kgazu41@ybl,Maharashtra,HDFC,clean,0
+38c6e804-3e7,l3wxdrlc@upi,Kerala,ICICI,clean,0
+9ca3624a-117,w83y0mah@ibl,Karnataka,ICICI,clean,0
+c3f5b069-37e,2zbppfo5@upi,Maharashtra,Kotak,clean,0
+172a1c93-d06,dr5xyfc4@paytm,Telangana,SBI,clean,0
+a083e671-4cd,jdm5fc79@upi,Maharashtra,Kotak,clean,0
+aadb54c8-2d0,6zpxvpbl@okaxis,Kerala,Axis,clean,0
+b3d818db-f57,t7txkdot@axl,Gujarat,HDFC,clean,0
+0a090c2a-c48,mpkxvhag@paytm,Tamil Nadu,SBI,clean,0
+65e2fb55-c36,4lorxdtg@apl,Telangana,ICICI,clean,0
+55a726c6-908,qjqijc1y@ibl,Karnataka,PNB,clean,0
+d6c09182-2d4,3o1icns8@axl,Maharashtra,Kotak,clean,0
+f17ab0c6-4a0,rc6zs62y@oksbi,Karnataka,SBI,clean,0
+d3047a7e-914,q8ghgbcy@okaxis,West Bengal,BOB,clean,0
+4d39a635-f9c,fvl03dut@paytm,Gujarat,Kotak,clean,0
+68d7613a-6e9,7azv2efu@ibl,Telangana,SBI,clean,0
+db40ef7b-9eb,22555jxu@axl,Kerala,SBI,clean,0
+93910c55-ea9,jfvyb6li@axl,Karnataka,ICICI,clean,0
+e9b226cc-92f,a3kkrzd5@oksbi,Maharashtra,ICICI,clean,0
+c8b30791-50e,p3jpxgh3@axl,Gujarat,BOB,clean,0
+35771e25-0a2,53sflse4@ybl,Kerala,HDFC,clean,0
+d47e844a-967,5hcbbmhn@axl,Karnataka,Kotak,clean,0
+e2bf96c9-371,webnvg5v@upi,Telangana,ICICI,clean,0
+528a0fca-b7e,4j3dab42@okaxis,Karnataka,BOB,clean,0
+27c58270-7c1,xyjoa21a@oksbi,Karnataka,PNB,clean,0
+90f01618-4ff,vaj2k8xp@apl,Karnataka,BOB,clean,0
+93e3cdef-acd,qhkswva9@upi,Maharashtra,Kotak,clean,0
+170acc6e-133,vkyrmjlj@paytm,Gujarat,HDFC,clean,0
+9553f767-1f2,sic43olf@ybl,Karnataka,PNB,clean,0
+0fd97e8e-b69,9jpnbzug@okaxis,Telangana,PNB,clean,0
+f8967d89-388,wr7mkgxu@paytm,Kerala,SBI,clean,0
+213b8037-53d,ej31gymd@upi,Telangana,HDFC,clean,0
+ba39ac93-7b7,5p5nvqeb@ibl,Gujarat,Axis,clean,0
+7ed57be9-1ec,s5nkb4eh@apl,Karnataka,Kotak,clean,0
+07d8fa8c-cff,f5gcl9lc@axl,Telangana,ICICI,clean,0
+2645ceb7-5d8,1g1r1dww@apl,Karnataka,Axis,clean,0
+b9a38cd2-91b,nbhnal3g@ybl,Telangana,PNB,clean,0
+3151edf4-e43,iymenvg3@paytm,Gujarat,ICICI,clean,0
+f9cbacae-054,0vm59m6m@okaxis,Telangana,HDFC,clean,0
+f2b82c08-c17,oi0e0vgn@ybl,West Bengal,Axis,clean,0
+893cdd77-540,jtb9xxay@apl,Gujarat,Axis,clean,0
+fc2bbd6e-bd4,ejzhyapd@icici,Telangana,ICICI,clean,0
+e8f965a5-a64,ve3dzeed@okaxis,Kerala,Kotak,clean,0
+0f7c79b6-edf,239moft6@axl,Karnataka,ICICI,clean,0
+05351dc8-a9a,ay64yfds@ibl,Karnataka,ICICI,clean,0
+feaf9f0b-cd9,i9kqdgbk@upi,Gujarat,Axis,clean,0
+cb20a360-856,e46aexl6@paytm,Gujarat,PNB,clean,0
+3730892d-042,nmeoq4yr@apl,Tamil Nadu,PNB,clean,0
+323f67af-ede,ge094d6r@axl,West Bengal,HDFC,clean,0
+68a8ef6f-279,nmby49e7@ibl,Kerala,Axis,clean,0
+382cfba4-cfb,bjlzy1uu@upi,Telangana,Kotak,clean,0
+536cc49c-7b9,ywp0rxxf@icici,Kerala,Kotak,clean,0
+03564e58-3fd,a7sqrf1l@upi,Tamil Nadu,ICICI,clean,0
+4a22d1fb-5bc,stn3cpud@axl,Tamil Nadu,Axis,clean,0
+3396a1f3-654,erxdouad@paytm,Maharashtra,Kotak,clean,0
+294c42d1-181,hy8nbiqu@axl,Kerala,PNB,clean,0
+0ec40a2e-3f7,nqdxamw2@icici,Gujarat,Kotak,clean,0
+7664c07f-020,zbffzzdv@okaxis,Maharashtra,SBI,clean,0
+c1cf6d05-d52,oq2zdo74@ibl,West Bengal,BOB,clean,0
+964a35db-404,qvs8a0tp@axl,Telangana,Kotak,clean,0
+f2e7fec2-ac8,7gu0env5@icici,West Bengal,Axis,clean,0
+08348a0c-8d8,961j88qe@apl,Telangana,Kotak,clean,0
+b194fbf8-08e,5s4tl0th@okaxis,Gujarat,Kotak,clean,0
+3a2ea2b9-ebe,kmy9x8sy@upi,Gujarat,PNB,clean,0
+d28e8866-080,1uu7zy6t@apl,Tamil Nadu,BOB,clean,0
+7814c846-782,safyh1fk@paytm,Tamil Nadu,HDFC,clean,0
+f56a4c57-7ae,c2htmqwy@icici,West Bengal,BOB,clean,0
+0cb4a777-b67,0ui22kx7@apl,Karnataka,Axis,clean,0
+2443c8c7-7e8,9ltajw25@okaxis,West Bengal,PNB,clean,0
+2b7b25ce-4e9,znv0h0gq@ibl,Gujarat,HDFC,clean,0
+9005bc5c-f39,0ebkjf4a@axl,Karnataka,PNB,clean,0
+6a37d574-e6f,b7v1w4k2@icici,Karnataka,ICICI,clean,0
+f3952d16-235,2lhgcsot@ibl,Tamil Nadu,ICICI,clean,0
+4c2dd6a9-8c7,5xlk8wru@ybl,Karnataka,SBI,clean,0
+4590ba2b-076,mix7ib5n@ibl,Gujarat,Axis,clean,0
+b1b0f143-ca6,tk63n2qb@okaxis,Maharashtra,ICICI,clean,0
+215eaeac-210,cd81twhw@okaxis,Kerala,BOB,clean,0
+676d9892-38a,pdtz91x7@oksbi,Gujarat,SBI,clean,0
+a45a1f06-4cb,zbcgjc36@apl,Telangana,Axis,clean,0
+a9a1d8cd-197,wpaytxw1@ybl,Telangana,PNB,clean,0
+044bb7dc-666,c7d2kd1p@apl,West Bengal,BOB,clean,0
+4c7b95ce-541,bfh024kw@paytm,Gujarat,PNB,clean,0
+a870d6ed-72c,5x8a5fbu@apl,West Bengal,Kotak,clean,0
+116067d7-992,8k06moxs@oksbi,Kerala,HDFC,clean,0
+2328b533-d95,wjeyub19@icici,Karnataka,Axis,clean,0
+ba81f20d-2be,tkcd0rle@okaxis,Gujarat,SBI,clean,0
+dec88820-146,w6lqwlvu@upi,Maharashtra,BOB,clean,0
+dc036929-eff,8gl2zxjm@upi,Maharashtra,Axis,clean,0
+ca1e97cd-4e6,q1rdxck3@icici,Telangana,HDFC,clean,0
+815a78a7-e61,0w064w3u@okaxis,Maharashtra,SBI,clean,0
+8e5cd165-8cb,j6txfo6v@paytm,Kerala,HDFC,clean,0
+66c63394-70b,sdnai89y@icici,Telangana,HDFC,clean,0
+d7955ac1-ec5,fuu5f07b@axl,Telangana,HDFC,clean,0
+ab332325-6cf,jiys2n75@ybl,Tamil Nadu,PNB,clean,0
+5a53f848-ec8,d8wj0uun@apl,Maharashtra,ICICI,clean,0
+b28fc016-34a,x4sn6sm5@axl,Kerala,BOB,clean,0
+2c0c791b-29d,5a5piskf@oksbi,Telangana,ICICI,clean,0
+8a34eeb1-73d,zei3zrrh@oksbi,Kerala,PNB,clean,0
+4c26e044-3e8,oieves6f@oksbi,West Bengal,ICICI,clean,0
+0a9225e3-208,so8w5038@okaxis,Karnataka,Axis,clean,0
+87088df9-723,95g3v23g@icici,Kerala,ICICI,clean,0
+d434bc72-c00,0mqvindh@icici,Karnataka,PNB,clean,0
+6109748c-75e,3vg6v5t1@ibl,Telangana,Axis,clean,0
+253a3b26-f4f,ev361xsn@ybl,Gujarat,PNB,clean,0
+61dacc37-3af,p7r1m264@ibl,Kerala,Axis,clean,0
+404bee3c-794,j16dvtja@ybl,Karnataka,Kotak,clean,0
+17fca863-f60,eaxylnfx@paytm,Kerala,ICICI,clean,0
+16e55977-f2b,tuw9ohtu@oksbi,West Bengal,ICICI,clean,0
+2bd5d145-db0,tjlmz04x@okaxis,Kerala,Axis,clean,0
+a65a521d-a01,zfhomtzz@oksbi,West Bengal,Axis,clean,0
+abb0956f-413,adf7pchc@ybl,Gujarat,PNB,clean,0
+46b23fe2-5eb,7oxk8c1g@axl,Telangana,Axis,clean,0
+ebee6395-f0f,hx2kbvsi@oksbi,Tamil Nadu,PNB,clean,0
+bb266567-4bb,mx9djoyo@okaxis,Tamil Nadu,Kotak,clean,0
+e75380e3-936,0cdk36m8@paytm,Tamil Nadu,HDFC,clean,0
+701c0d10-59a,8qoagsus@upi,Kerala,SBI,clean,0
+d797c026-0e2,sjt2jpnr@okaxis,West Bengal,BOB,clean,0
+6ba34083-55e,8qqvaecw@okaxis,Maharashtra,PNB,clean,0
+0ff28a1c-817,il8sa3id@upi,Gujarat,SBI,clean,0
+36890ab2-d16,7rm6j8y6@axl,Kerala,PNB,clean,0
+333ff240-187,iiji44m2@ibl,Karnataka,SBI,clean,0
+bb2eba83-a1c,8ra484nl@paytm,Gujarat,Axis,clean,0
+8faab40b-0cf,96khub2r@icici,Karnataka,SBI,clean,0
+f826568b-9f5,m41qesla@okaxis,Kerala,Axis,clean,0
+daefad95-27b,dn5gjj8m@oksbi,Kerala,Axis,clean,0
+10818e5f-69f,hzn4kgeu@okaxis,Telangana,BOB,clean,0
+d41e17b8-b9f,z2t4h20r@ybl,Tamil Nadu,HDFC,clean,0
+3c8e10be-1ce,r94sz2ku@ybl,Telangana,Axis,clean,0
+8b3a52b5-76e,yc3rwqmm@icici,Tamil Nadu,Kotak,clean,0
+d23b9c8f-278,jae58hux@oksbi,West Bengal,BOB,clean,0
+9b3bd143-106,myr06nkw@oksbi,Maharashtra,BOB,clean,0
+2500e1a0-89a,x7pwo6cm@upi,Karnataka,ICICI,clean,0
+e4a54308-6a3,kjxjq5nv@axl,Gujarat,Axis,clean,0
+15bb3739-991,ga0x7zcg@ibl,Karnataka,SBI,clean,0
+fdf65419-e86,7rb1s9dw@ibl,Tamil Nadu,PNB,clean,0
+9bb85d81-e50,likwe4bx@upi,Telangana,BOB,clean,0
+fbac67aa-dd8,q57te8tv@axl,Telangana,PNB,clean,0
+cdd27bc1-dc1,wusxlmt2@axl,Gujarat,ICICI,clean,0
+de630927-308,ofas1ekt@axl,Maharashtra,BOB,clean,0
+3903da2e-a66,k12v2tg5@apl,Telangana,Axis,clean,0
+f1306f21-cef,f0onjpi1@paytm,Karnataka,ICICI,clean,0
+a371a87c-ef1,03o4gkww@paytm,Gujarat,PNB,clean,0
+0a10972f-813,rlf8a9ke@axl,Kerala,PNB,clean,0
+7e962fc5-e68,ifrml29q@ybl,Tamil Nadu,ICICI,clean,0
+88ccb91c-dbb,48c1cqg4@apl,Tamil Nadu,BOB,clean,0
+3130fc81-4e9,e1i1p0bq@ibl,Tamil Nadu,Kotak,clean,0
+786ee19f-951,9ryllwb7@icici,Gujarat,SBI,clean,0
+f5ed200a-714,rkmby9ip@ybl,Maharashtra,HDFC,clean,0
+8cc02af2-3b1,je2ab2rv@upi,West Bengal,BOB,clean,0
+4956140d-046,irym81cm@oksbi,Tamil Nadu,PNB,clean,0
+bf8daac7-444,2ei9212p@okaxis,Kerala,SBI,clean,0
+4a3fb95b-e6e,n0jbzutr@oksbi,Gujarat,Kotak,clean,0
+15386809-9f2,lq5v4ftq@paytm,Maharashtra,Kotak,clean,0
+8ed524ee-6d2,q1s05wnw@upi,Maharashtra,PNB,clean,0
+320db857-eb5,xtnsrtwl@upi,Tamil Nadu,SBI,clean,0
+11c9ca6c-0cd,sc4e5hrd@apl,Tamil Nadu,PNB,clean,0
+e08eea9e-3fa,szjnvc7h@axl,Telangana,BOB,clean,0
+fc67a622-d29,qxm0632c@paytm,Tamil Nadu,Kotak,clean,0
+7193a5d0-081,04chsdin@okaxis,Tamil Nadu,Kotak,clean,0
+b06871d7-817,iwg0odwm@axl,Gujarat,PNB,clean,0
+30954f8d-335,pd2tsxtv@upi,Gujarat,ICICI,clean,0
+a408bd71-981,9ln1p0vu@okaxis,Kerala,Axis,clean,0
+9638e7a0-a3a,t0mq8abk@ybl,West Bengal,Kotak,clean,0
+898ace33-3f3,9kkh4a3y@paytm,Karnataka,Kotak,clean,0
+2b0e6e2e-1f6,u7fbmenu@okaxis,Kerala,ICICI,clean,0
+9658742d-f26,kuuhclrr@ibl,West Bengal,Kotak,clean,0
+18efcd83-447,k0ucc1m3@apl,Gujarat,BOB,clean,0
+3f9ee135-4b0,5ixva1nk@ybl,Tamil Nadu,ICICI,clean,0
+71106fca-bed,ulzfy981@icici,Kerala,SBI,clean,0
+e15d55b9-ba9,p2fmr0tj@apl,Karnataka,Kotak,clean,0
+8f237b1a-04e,1eeurxhw@icici,Telangana,HDFC,clean,0
+cee17028-635,c1l7dypm@upi,Karnataka,ICICI,clean,0
+56954669-560,x1gm32wp@okaxis,Kerala,HDFC,clean,0
+d2688e7f-3c2,n14eb875@paytm,Gujarat,SBI,clean,0
+38d6e582-cd0,yeqahths@paytm,Maharashtra,Kotak,clean,0
+3c3c1190-4fb,w9zyn6sj@ybl,Telangana,ICICI,clean,0
+bfa5558d-959,2wbxanj4@upi,Karnataka,BOB,clean,0
+ad258476-426,a5xin9dl@icici,Tamil Nadu,SBI,clean,0
+0dcc2242-7f7,h8uzb7kr@oksbi,Karnataka,SBI,clean,0
+c716a5a8-fe4,ymk99jcj@apl,Maharashtra,BOB,clean,0
+0248c411-18c,78imoe0s@okaxis,Tamil Nadu,Axis,clean,0
+33e404df-c0a,uplvqexu@okaxis,Karnataka,BOB,clean,0
+ce4481c5-154,lzse99f7@oksbi,Karnataka,ICICI,clean,0
+c881ee60-b74,u8el5015@apl,Tamil Nadu,Axis,clean,0
+291be5ac-6df,p767j2dg@paytm,Maharashtra,Kotak,clean,0
+ef581a18-a36,wviac2e4@axl,Kerala,PNB,clean,0
+29d0cf3a-270,n4regb1a@paytm,Gujarat,Axis,clean,0
+e21f0d08-204,091c795r@upi,Karnataka,BOB,clean,0
+5ec1cb78-2d9,5p1v3zo7@icici,Telangana,Kotak,clean,0
+ec8fbf62-67f,52sq3b9s@apl,Gujarat,PNB,clean,0
+7f90cc04-8a6,uswbkok3@axl,Tamil Nadu,HDFC,clean,0
+368e12fa-90b,k7y6qxds@oksbi,Telangana,BOB,clean,0
+f7e163d4-403,7zeoqgvz@okaxis,Kerala,Axis,clean,0
+2197e198-4e7,jy62zeeq@upi,Tamil Nadu,SBI,clean,0
+69681540-b97,z09wftbg@upi,Kerala,Kotak,clean,0
+2fa2cb90-de4,xf5gzpl1@axl,West Bengal,ICICI,clean,0
+93972fa1-bff,g68a1arr@ybl,Gujarat,Kotak,clean,0
+40e259ef-b8c,ivrocvit@icici,Telangana,BOB,clean,0
+aab2c0e3-bcd,hgbmfbuv@upi,West Bengal,SBI,clean,0
+1433fde1-1dd,d9fkxzuu@axl,Tamil Nadu,PNB,clean,0
+d40c7f91-9fe,mb1l6314@ibl,Kerala,ICICI,clean,0
+4d45d924-039,ezjsszwd@icici,Telangana,SBI,clean,0
+32db899d-85a,0v2zp4ju@upi,Telangana,HDFC,clean,0
+c0de6a5e-0b9,uswrgvz9@ybl,Kerala,SBI,clean,0
+1f7e151c-59a,q20hwobm@okaxis,Tamil Nadu,SBI,clean,0
+ff015559-481,hk2lslay@upi,Gujarat,Axis,clean,0
+043e14fa-255,u83g47rr@ybl,Gujarat,PNB,clean,0
+7b3b2f4a-e30,rw6tm2o0@icici,Karnataka,ICICI,clean,0
+3c04574b-b03,0lthy25m@oksbi,Kerala,ICICI,clean,0
+1dff960e-c72,b9w4uov5@paytm,West Bengal,PNB,clean,0
+d1aedf8e-b07,lboriq8h@paytm,West Bengal,HDFC,clean,0
+6cb62eb2-7f2,nbhds26f@upi,Tamil Nadu,Axis,clean,0
+4e8e9973-82f,5ll1d9s9@okaxis,Gujarat,PNB,clean,0
+3c3a17d9-186,qzsa7yvd@axl,Tamil Nadu,SBI,clean,0
+0d49bdb5-2c0,sxlul6lg@paytm,Tamil Nadu,Kotak,clean,0
+54c54ed4-726,1yjfe8ud@icici,Maharashtra,ICICI,clean,0
+de2ef3f1-ab7,lfzkicwm@axl,Kerala,SBI,clean,0
+13339c2c-6a6,b6bndoz6@axl,Karnataka,Kotak,clean,0
+8cf20348-4b6,l3zyt91q@oksbi,Maharashtra,SBI,clean,0
+bc5d6484-72a,2zdlx1q8@oksbi,West Bengal,BOB,clean,0
+01fe3c1a-6f8,jng7l4lr@ibl,Kerala,Axis,clean,0
+9abe9954-38e,mqg1ved3@ibl,Tamil Nadu,ICICI,clean,0
+e738b31f-0c3,x2toowt9@apl,Kerala,SBI,clean,0
+5327d76c-929,hyp9umyg@ibl,Maharashtra,PNB,clean,0
+7b0d2a9d-0f8,urvqt3g8@ibl,Gujarat,Kotak,clean,0
+05438732-9d3,yv3lxchf@ybl,Tamil Nadu,BOB,clean,0
+28070a63-70b,xqkwqh5k@paytm,Karnataka,Axis,clean,0
+3941c113-d9b,9mda9oek@upi,Gujarat,Kotak,clean,0
+60186fb8-833,au9dkbpv@upi,Tamil Nadu,PNB,clean,0
+403938ca-605,ophgft4m@apl,Telangana,HDFC,clean,0
+388259e0-08a,9yecazrp@oksbi,Maharashtra,SBI,clean,0
+3e35461b-eca,xoq2vpgs@icici,Karnataka,BOB,clean,0
+1e76c35b-bdc,nipar0zj@icici,Telangana,Kotak,clean,0
+94acc6b0-f97,bbrnu8c0@icici,Maharashtra,BOB,clean,0
+edc4c65a-097,2qc6dr08@ibl,West Bengal,PNB,clean,0
+409c06a8-91d,tuw6taq6@upi,Gujarat,Axis,clean,0
+dcd27afa-05a,82kb700u@ybl,Maharashtra,PNB,clean,0
+7992b6ba-0fd,uuxk0are@ibl,Telangana,BOB,clean,0
+6fca54c3-692,kek4aegv@oksbi,West Bengal,PNB,clean,0
+b7684321-a5d,ng2igsb9@oksbi,Telangana,Kotak,clean,0
+0e051c39-642,fr91ipwh@upi,West Bengal,SBI,clean,0
+f8adb759-ff2,j3bqrr87@okaxis,Gujarat,Axis,clean,0
+4b4c4d05-3db,zrf5a7qy@icici,Gujarat,PNB,clean,0
+52136084-c7a,dtm4vxjj@ibl,Tamil Nadu,ICICI,clean,0
+692618fb-a65,vqyiy1sy@oksbi,Gujarat,ICICI,clean,0
+7cd0e4eb-ec5,aacosym0@paytm,Kerala,HDFC,clean,0
+f694d29f-aad,ad7x48wz@ibl,Tamil Nadu,SBI,clean,0
+b8323e22-9c7,vn1x2gdg@paytm,West Bengal,Axis,clean,0
+7f32ed98-3eb,7w7jp61l@oksbi,Gujarat,BOB,clean,0
+59d7c029-a96,jcn9j3gc@okaxis,Tamil Nadu,Kotak,clean,0
+40f8aee9-d31,grf1hx6z@ibl,Telangana,SBI,clean,0
+a094d57c-0e5,c01arxab@apl,Tamil Nadu,ICICI,clean,0
+a8bc7367-673,z6us7rp4@ibl,Karnataka,Kotak,clean,0
+88c32907-0d3,a83ru7my@apl,Karnataka,SBI,clean,0
+cc2c3f3e-4c7,9xn4m41k@okaxis,Gujarat,HDFC,clean,0
+de032811-f29,bngz6wmd@axl,Kerala,PNB,clean,0
+8e73c27c-e02,fgzvrctl@icici,Karnataka,BOB,clean,0

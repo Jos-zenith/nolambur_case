@@ -1,0 +1,9 @@
+{
+  "total_accounts": 549,
+  "total_transactions": 4840,
+  "fraud_transactions": 40,
+  "illicit_ratio_pct": 0.8264,
+  "mule_accounts": 43,
+  "victim_accounts": 6,
+  "geo_mismatch": "Victims: ['Tamil Nadu'] \u2192 Mules: ['Uttarakhand', 'Rajasthan', 'Uttarakhand', 'Rajasthan', 'Delhi', 'Haryana']"
+}

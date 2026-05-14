@@ -1,0 +1,19 @@
+2026-05-14 23:41:45,493 [INFO ]
+============================================================
+2026-05-14 23:41:45,493 [INFO ] STAGE 1: PRETRAINING ON IBM AML DATA
+2026-05-14 23:41:45,494 [INFO ] ============================================================
+2026-05-14 23:41:45,496 [INFO ]
+============================================================
+2026-05-14 23:41:45,497 [INFO ] STAGE: PRETRAIN - Dataset: HI-Large
+2026-05-14 23:41:45,498 [INFO ] ============================================================
+2026-05-14 23:42:13,368 [INFO ] Available Edge Features: ['EdgeID', 'from_id', 'to_id', 'Timestamp', 'Amount Sent', 'Sent Currency', 'Amount Received', 'Received Currency', 'Payment Format', 'Is Laundering']
+2026-05-15 00:20:22,522 [INFO ] Illicit ratio = 46730 / 40462888 = 0.12%
+2026-05-15 00:20:22,574 [INFO ] Number of nodes (holdings doing transcations) = 122393
+2026-05-15 00:20:22,576 [INFO ] Number of transactions = 40462888
+2026-05-15 00:20:22,577 [INFO ] Edge features being used: ['Timestamp', 'Amount Received', 'Received Currency', 'Payment Format']
+2026-05-15 00:20:22,578 [INFO ] Node features being used: ['Feature'] ("Feature" is a placeholder feature of all 1s)
+2026-05-15 00:20:31,531 [INFO ] number of days and transactions in the data: 90 days, 40462888 transactions
+2026-05-15 00:20:37,169 [INFO ] Calculate split: [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], [12, 13, 14, 15, 16], [17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89]]
+2026-05-15 00:20:37,363 [INFO ] Total train samples: 62.45% || IR: 0.05% || Train days: [0, 1, 2, 3, 4]
+2026-05-15 00:20:37,403 [INFO ] Total val samples: 18.41% || IR: 0.10% || Val days: [12, 13, 14, 15, 16]
+2026-05-15 00:20:37,441 [INFO ] Total test samples: 19.14% || IR: 0.33% || Test days: [17, 18, 19, 20, 21]
