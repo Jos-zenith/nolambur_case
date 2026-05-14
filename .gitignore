@@ -13,6 +13,6 @@ __v0_jsx-dev-runtime.ts
 node_modules
 .next/
 .DS_Store
-Multi-GNN/
+
 venv/
 ibm-transactions-for-anti-money-laundering-aml/# Exclude Multi-GNN heavy artifacts\nMulti-GNN/models/\nMulti-GNN/logs/\nMulti-GNN/wandb/\nMulti-GNN/.git
