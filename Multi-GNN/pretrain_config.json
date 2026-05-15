@@ -86,7 +86,7 @@
     "pretrain": {
       "name": "Pretraining on IBM AML",
       "dataset": "ibm_aml",
-      "dataset_variant": "HI-Large",
+      "dataset_variant": "HI-Small",
       "epochs": 100,
       "patience": 10,
       "learning_rate_factor": 1.0,
