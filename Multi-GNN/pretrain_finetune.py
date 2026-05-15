@@ -357,16 +357,30 @@ class TwoStageFinetuner:
             tr_ibm, val_ibm, te_ibm, tr_inds_ibm, val_inds_ibm, te_inds_ibm = \
                 self.load_and_prepare_data("PRETRAIN", "HI-Small")
             
-            pretrain_model, pretrain_val_f1 = self.train_stage(
-                stage_name="PRETRAIN",
-                tr_data=tr_ibm,
-                val_data=val_ibm,
-                te_data=te_ibm,
-                tr_inds=tr_inds_ibm,
-                val_inds=val_inds_ibm,
-                te_inds=te_inds_ibm,
-                model=None
-            )
+            # Check if pretrained model already exists
+            pretrain_save_path = Path(self.args.save_dir or "models") / f"pretrained_{self.args.model}_ibm.pt"
+            pretrain_val_f1 = None
+            
+            if pretrain_save_path.exists():
+                logging.info(f"[INFO] Found saved pretrain model at {pretrain_save_path}")
+                logging.info("[INFO] Skipping pretraining, loading weights...")
+                pretrain_model = self.create_model()
+                pretrain_model.load_state_dict(torch.load(pretrain_save_path, map_location=self.device))
+                pretrain_model.to(self.device)
+                pretrain_val_f1 = 0.0  # Placeholder; not used for loaded model
+                logging.info("✓ Pretrained weights loaded")
+            else:
+                logging.info("[INFO] No saved pretrain model found, starting pretraining...")
+                pretrain_model, pretrain_val_f1 = self.train_stage(
+                    stage_name="PRETRAIN",
+                    tr_data=tr_ibm,
+                    val_data=val_ibm,
+                    te_data=te_ibm,
+                    tr_inds=tr_inds_ibm,
+                    val_inds=val_inds_ibm,
+                    te_inds=te_inds_ibm,
+                    model=None
+                )
             
             logging.info(f"\n✓ Pretraining complete. Best Val F1: {pretrain_val_f1:.4f}")
             
@@ -385,18 +399,32 @@ class TwoStageFinetuner:
             tr_nol, val_nol, te_nol, tr_inds_nol, val_inds_nol, te_inds_nol = \
                 self.load_and_prepare_data("FINETUNE", "nolambur")
             
-            # Fine-tune with pretrained weights and reduced learning rate
-            finetuned_model, finetune_val_f1 = self.train_stage(
-                stage_name="FINETUNE",
-                tr_data=tr_nol,
-                val_data=val_nol,
-                te_data=te_nol,
-                tr_inds=tr_inds_nol,
-                val_inds=val_inds_nol,
-                te_inds=te_inds_nol,
-                model=pretrain_model,  # Use pretrained model
-                reduced_epochs=50  # Fewer epochs for fine-tuning
-            )
+            # Check if finetuned model already exists
+            finetune_save_path = Path(self.args.save_dir or "models") / f"finetuned_{self.args.model}_nolambur.pt"
+            finetune_val_f1 = None
+            
+            if finetune_save_path.exists():
+                logging.info(f"[INFO] Found saved finetune model at {finetune_save_path}")
+                logging.info("[INFO] Skipping fine-tuning, loading weights...")
+                finetuned_model = self.create_model()
+                finetuned_model.load_state_dict(torch.load(finetune_save_path, map_location=self.device))
+                finetuned_model.to(self.device)
+                finetune_val_f1 = 0.0  # Placeholder; not used for loaded model
+                logging.info("✓ Finetuned weights loaded")
+            else:
+                logging.info("[INFO] No saved finetune model found, starting fine-tuning...")
+                # Fine-tune with pretrained weights and reduced learning rate
+                finetuned_model, finetune_val_f1 = self.train_stage(
+                    stage_name="FINETUNE",
+                    tr_data=tr_nol,
+                    val_data=val_nol,
+                    te_data=te_nol,
+                    tr_inds=tr_inds_nol,
+                    val_inds=val_inds_nol,
+                    te_inds=te_inds_nol,
+                    model=pretrain_model,  # Use pretrained model
+                    reduced_epochs=50  # Fewer epochs for fine-tuning
+                )
             
             logging.info(f"\n✓ Fine-tuning complete. Best Val F1: {finetune_val_f1:.4f}")
             
