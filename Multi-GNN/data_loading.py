@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import logging
 import itertools
+from pathlib import Path
 from data_util import GraphData, HeteroData, z_norm, create_hetero_obj
 
 def get_data(args, data_config):
@@ -13,7 +14,11 @@ def get_data(args, data_config):
     3. PyG Data objects are created with the respective data splits.
     '''
 
-    transaction_file = f"{data_config['paths']['aml_data']}/{args.data}/formatted_transactions.csv" #replace this with your path to the respective AML data objects
+    aml_data_path = Path(data_config['paths']['aml_data'])
+    if aml_data_path.suffix.lower() == '.csv':
+        transaction_file = str(aml_data_path)
+    else:
+        transaction_file = str(aml_data_path / args.data / 'formatted_transactions.csv')  # replace this with your path to the respective AML data objects
     df_edges = pd.read_csv(transaction_file)
 
     logging.info(f'Available Edge Features: {df_edges.columns.tolist()}')

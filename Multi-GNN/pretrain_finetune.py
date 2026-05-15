@@ -25,6 +25,30 @@ import pandas as pd
 import numpy as np
 
 
+def _format_seconds(seconds: float) -> str:
+    minutes, secs = divmod(int(max(seconds, 0)), 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m {secs}s"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
+
+
+def _edge_attr_tensor(graph_data: Any) -> torch.Tensor:
+    edge_attr = getattr(graph_data, "edge_attr", None)
+    if edge_attr is None:
+        raise ValueError("Expected edge_attr on graph data")
+    return edge_attr
+
+
+def _node_feature_tensor(graph_data: Any) -> torch.Tensor:
+    x = getattr(graph_data, "x", None)
+    if x is None:
+        raise ValueError("Expected x on graph data")
+    return x
+
+
 class TwoStageFinetuner:
     """Manages pretraining on IBM AML + fine-tuning on Nolambur data"""
     
@@ -39,6 +63,8 @@ class TwoStageFinetuner:
     
     def load_and_prepare_data(self, stage_name: str, dataset_name: str) -> Tuple:
         """Load data for a specific stage"""
+        print(f"DEBUG >>> loading dataset: {dataset_name}")
+        print(f"DEBUG >>> args.data = {self.args.data}")
         logging.info(f"\n{'='*60}")
         logging.info(f"STAGE: {stage_name.upper()} - Dataset: {dataset_name}")
         logging.info(f"{'='*60}")
@@ -63,8 +89,8 @@ class TwoStageFinetuner:
         self.args.data = original_data
         
         logging.info(f"✓ Loaded {stage_name} data: "
-                    f"Train={tr_data.x.shape[0]} nodes, "
-                    f"Val={val_data.x.shape[0] if hasattr(val_data, 'x') else '?'} nodes")
+                    f"Train={_node_feature_tensor(tr_data).shape[0]} nodes, "
+                    f"Val={_node_feature_tensor(val_data).shape[0] if getattr(val_data, 'x', None) is not None else '?'} nodes")
         
         return tr_data, val_data, te_data, tr_inds, val_inds, te_inds
     
@@ -107,6 +133,7 @@ class TwoStageFinetuner:
         elif model_name == 'rgcn':
             model = RGCN(
                 num_features=num_features,
+                num_relations=8,
                 num_gnn_layers=int(config['n_gnn_layers']),
                 n_classes=2,
                 n_hidden=int(config['n_hidden']),
@@ -131,8 +158,8 @@ class TwoStageFinetuner:
         
         # Initialize model if not provided (pretraining case)
         if model is None:
-            num_features = tr_data.x.shape[1]
-            num_edge_features = tr_data.edge_attr.shape[1]
+            num_features = _node_feature_tensor(tr_data).shape[1]
+            num_edge_features = _edge_attr_tensor(tr_data).shape[1]
             model = self.initialize_model(num_features, num_edge_features)
             logging.info(f"✓ Initialized new model for {stage_name}")
         else:
@@ -185,20 +212,28 @@ class TwoStageFinetuner:
         patience_counter = 0
         patience = 10
         
+        total_batches = len(tr_loader) if hasattr(tr_loader, "__len__") else None
+        stage_start = time.perf_counter()
+        
         for epoch in range(epochs):
+            epoch_start = time.perf_counter()
             model.train()
             total_loss = 0
             preds = []
             ground_truths = []
             
-            for batch in tqdm.tqdm(tr_loader, disable=not self.args.tqdm, 
-                                  desc=f"{stage_name} Epoch {epoch+1}/{epochs}"):
+            for batch_idx, batch in enumerate(
+                tqdm.tqdm(tr_loader, disable=not self.args.tqdm, 
+                          desc=f"{stage_name} Epoch {epoch+1}/{epochs}"),
+                start=1,
+            ):
+                batch_start = time.perf_counter()
                 optimizer.zero_grad()
                 
                 # Get mask for seed edges
                 inds = tr_inds.detach().cpu()
                 batch_edge_inds = inds[batch.input_id.detach().cpu()]
-                batch_edge_ids = tr_loader.data.edge_attr.detach().cpu()[batch_edge_inds, 0]
+                batch_edge_ids = _edge_attr_tensor(tr_loader.data).detach().cpu()[batch_edge_inds, 0]
                 mask = torch.isin(batch.edge_attr[:, 0].detach().cpu(), batch_edge_ids)
                 
                 # Remove unique edge id from edge features
@@ -217,6 +252,19 @@ class TwoStageFinetuner:
                 optimizer.step()
                 
                 total_loss += float(loss) * pred.numel()
+
+                if total_batches and (batch_idx == 1 or batch_idx % max(1, total_batches // 5) == 0 or batch_idx == total_batches):
+                    elapsed_epoch = time.perf_counter() - epoch_start
+                    avg_batch_time = elapsed_epoch / batch_idx
+                    remaining_epoch = avg_batch_time * (total_batches - batch_idx)
+                    remaining_stage = remaining_epoch + (epochs - epoch - 1) * elapsed_epoch
+                    logging.info(
+                        f"[{stage_name}] Epoch {epoch+1}/{epochs} "
+                        f"batch {batch_idx}/{total_batches} | "
+                        f"epoch ETA: {_format_seconds(remaining_epoch)} | "
+                        f"stage ETA: {_format_seconds(remaining_stage)} | "
+                        f"last batch: {time.perf_counter() - batch_start:.2f}s"
+                    )
             
             # Evaluate
             pred_all = torch.cat(preds, dim=0).detach().cpu().numpy()
@@ -249,6 +297,8 @@ class TwoStageFinetuner:
                     logging.info(f"  Early stopping at epoch {epoch+1} (patience={patience})")
                     break
         
+        logging.info(f"[{stage_name}] completed in {_format_seconds(time.perf_counter() - stage_start)}")
+
         # Restore best model
         if best_model_state is not None:
             model.load_state_dict(best_model_state)
@@ -265,7 +315,7 @@ class TwoStageFinetuner:
             for batch in loader:
                 inds_cpu = inds.detach().cpu()
                 batch_edge_inds = inds_cpu[batch.input_id.detach().cpu()]
-                batch_edge_ids = loader.data.edge_attr.detach().cpu()[batch_edge_inds, 0]
+                batch_edge_ids = _edge_attr_tensor(loader.data).detach().cpu()[batch_edge_inds, 0]
                 mask = torch.isin(batch.edge_attr[:, 0].detach().cpu(), batch_edge_ids)
                 
                 batch.edge_attr = batch.edge_attr[:, 1:]
