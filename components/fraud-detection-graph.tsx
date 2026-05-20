@@ -72,8 +72,8 @@ export default function FraudDetectionGraph() {
       ])
       .enter()
       .append('stop')
-      .attr('offset', d => d.offset)
-      .attr('stop-color', d => d.color)
+      .attr('offset', (d: any) => d.offset)
+      .attr('stop-color', (d: any) => d.color)
 
     // Create force simulation
     const simulation = d3.forceSimulation(mockData.nodes as any)
@@ -180,7 +180,7 @@ export default function FraudDetectionGraph() {
         event.subject.fy = null
       }
 
-      return d3.drag()
+      return d3.drag<SVGCircleElement, any>()
         .on('start', dragstarted)
         .on('drag', dragged)
         .on('end', dragended)

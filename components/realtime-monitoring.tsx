@@ -1,5 +1,7 @@
 'use client'
 
+import { AnimatedCounter } from '@/components/animated-counter'
+import { DataFreshness } from '@/components/data-freshness'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
@@ -29,6 +31,20 @@ const topAlerts = [
   { id: 'ALERT-005', cluster: 'Kolkata-Assam Route', risk: 'Medium', txns: 3, amount: '₹0.8L', eta: '35 mins', status: 'ANALYZING' },
 ]
 
+function riskBadgeClass(risk: string) {
+  if (risk === 'Critical') return 'bg-red-500/20 text-red-200 animate-alert-pulse'
+  if (risk === 'High') return 'bg-orange-500/20 text-orange-200'
+  if (risk === 'Medium') return 'bg-yellow-500/20 text-yellow-100'
+  return 'bg-blue-500/20 text-blue-100'
+}
+
+function statusBadgeClass(status: string) {
+  if (status === 'FROZEN') return 'bg-green-600/80 text-green-100'
+  if (status === 'FREEZING') return 'bg-red-500/30 text-red-100'
+  if (status === 'MONITORING') return 'bg-blue-600/80 text-blue-100'
+  return 'bg-gray-600/80 text-gray-100'
+}
+
 const systemMetrics = [
   { label: 'Avg Detection Latency', value: '340ms', change: -12, unit: 'ms' },
   { label: 'ZKP Proof Generation', value: '1.2s', change: -8, unit: 's' },
@@ -42,13 +58,20 @@ export default function RealTimeMonitoring() {
       {/* Key Metrics Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {systemMetrics.map((metric, idx) => (
-          <Card key={idx} className="bg-card/50 border-border">
+          <Card key={idx} data-risk={metric.change < 0 ? 'frozen' : 'critical'} className="bg-card/50 border-border">
             <CardHeader className="pb-2">
               <CardTitle className="text-xs text-muted-foreground">{metric.label}</CardTitle>
+              <DataFreshness className="text-[11px] text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold text-primary">{metric.value}</span>
+                <span className="text-2xl font-bold text-primary">
+                  <AnimatedCounter
+                    value={Number.parseFloat(metric.value)}
+                    decimals={metric.value.includes('.') ? 1 : 0}
+                    suffix={metric.value.replace(/[\d.]/g, '')}
+                  />
+                </span>
                 <span className={`flex items-center gap-1 text-xs ${metric.change < 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {metric.change < 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
                   {Math.abs(metric.change)}%
@@ -65,6 +88,7 @@ export default function RealTimeMonitoring() {
         <Card className="bg-card/50 border-border lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-sm">24-Hour Detection & Recovery Trend</CardTitle>
+            <DataFreshness className="text-[11px] text-muted-foreground" />
           </CardHeader>
           <CardContent className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -93,6 +117,7 @@ export default function RealTimeMonitoring() {
         <Card className="bg-card/50 border-border">
           <CardHeader>
             <CardTitle className="text-sm">Recovery Method Breakdown</CardTitle>
+            <DataFreshness className="text-[11px] text-muted-foreground" />
           </CardHeader>
           <CardContent className="flex flex-col items-center justify-center h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -125,6 +150,7 @@ export default function RealTimeMonitoring() {
             <Zap className="w-4 h-4 text-primary" />
             Top 5 Active Mule Clusters
           </CardTitle>
+          <DataFreshness className="text-[11px] text-muted-foreground" />
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -133,11 +159,7 @@ export default function RealTimeMonitoring() {
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <span className="font-mono text-xs text-primary">{alert.id}</span>
-                    <Badge className={
-                      alert.risk === 'Critical' ? 'bg-destructive/80 text-destructive-foreground' :
-                      alert.risk === 'High' ? 'bg-primary/60 text-primary-foreground' :
-                      'bg-muted text-muted-foreground'
-                    }>
+                    <Badge className={riskBadgeClass(alert.risk)}>
                       {alert.risk}
                     </Badge>
                     <Badge variant="outline" className="bg-secondary/40">{alert.cluster}</Badge>
@@ -147,12 +169,7 @@ export default function RealTimeMonitoring() {
                 <div className="flex items-center gap-3">
                   <div className="text-right">
                     <p className="text-xs font-mono text-accent mb-1">{alert.amount}</p>
-                    <Badge className={
-                      alert.status === 'FROZEN' ? 'bg-green-600/80 text-green-100' :
-                      alert.status === 'FREEZING' ? 'bg-yellow-600/80 text-yellow-100' :
-                      alert.status === 'MONITORING' ? 'bg-blue-600/80 text-blue-100' :
-                      'bg-gray-600/80 text-gray-100'
-                    }>
+                    <Badge className={statusBadgeClass(alert.status)}>
                       {alert.status}
                     </Badge>
                   </div>
@@ -171,9 +188,12 @@ export default function RealTimeMonitoring() {
         <Card className="bg-card/50 border-border">
           <CardHeader>
             <CardTitle className="text-xs text-muted-foreground">Golden Hour Recovery Rate</CardTitle>
+            <DataFreshness className="text-[11px] text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-accent">73.2%</div>
+            <div className="text-3xl font-bold text-accent">
+              <AnimatedCounter value={73.2} decimals={1} suffix="%" />
+            </div>
             <p className="text-xs text-muted-foreground mt-2">₹82.4 Cr recovered in last 7 days</p>
             <div className="mt-4 w-full bg-secondary/30 rounded h-2">
               <div className="w-[73.2%] h-2 rounded bg-accent transition-all" />
@@ -184,20 +204,26 @@ export default function RealTimeMonitoring() {
         <Card className="bg-card/50 border-border">
           <CardHeader>
             <CardTitle className="text-xs text-muted-foreground">Avg Case Resolution Time</CardTitle>
+            <DataFreshness className="text-[11px] text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-primary">47 mins</div>
+            <div className="text-3xl font-bold text-primary">
+              <AnimatedCounter value={47} suffix=" mins" />
+            </div>
             <p className="text-xs text-muted-foreground mt-2">From alert to final seizure</p>
             <p className="text-xs text-green-400 mt-2">↓ 18% faster than last month</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-card/50 border-border">
+        <Card data-risk="frozen" className="bg-card/50 border-border">
           <CardHeader>
             <CardTitle className="text-xs text-muted-foreground">Annual Loss Prevention</CardTitle>
+            <DataFreshness className="text-[11px] text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-400">₹22.5 Cr</div>
+            <div className="text-3xl font-bold text-green-400">
+              <AnimatedCounter value={22.5} decimals={1} prefix="₹" suffix=" Cr" />
+            </div>
             <p className="text-xs text-muted-foreground mt-2">9% of total UPI fraud losses</p>
             <p className="text-xs text-green-400 mt-2">↑ 31% higher than baseline</p>
           </CardContent>

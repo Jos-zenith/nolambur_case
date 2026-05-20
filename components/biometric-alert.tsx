@@ -1,6 +1,7 @@
 'use client'
 
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ScatterChart, Scatter } from 'recharts'
+import { DataFreshness } from '@/components/data-freshness'
 
 const stressData = [
   { timestamp: '14:22:00', stress: 20, confidence: 45 },
@@ -29,6 +30,7 @@ export default function BiometricAlert() {
       {/* Top: Stress Timeline */}
       <div className="bg-secondary/10 rounded border border-border p-4 h-1/2">
         <h4 className="text-sm font-semibold mb-3 text-primary">Real-Time Stress Index During Transaction</h4>
+        <DataFreshness className="mb-3 text-xs text-muted-foreground" />
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={stressData}>
             <defs>
@@ -56,7 +58,8 @@ export default function BiometricAlert() {
               <span className={`text-xs font-bold px-2 py-0.5 rounded ${
                 marker.risk === 'Critical' ? 'bg-destructive/20 text-destructive' :
                 marker.risk === 'High' ? 'bg-primary/20 text-primary' :
-                'bg-yellow-900/20 text-yellow-400'
+                marker.risk === 'Medium' ? 'bg-yellow-900/20 text-yellow-400' :
+                'bg-blue-500/20 text-blue-100'
               }`}>
                 {marker.risk}
               </span>

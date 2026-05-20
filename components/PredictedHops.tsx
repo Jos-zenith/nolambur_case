@@ -2,11 +2,19 @@
 
 import { useMemo, useState } from 'react'
 
+import { DataFreshness } from '@/components/data-freshness'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useMuleStore } from '@/lib/mule-store'
+
+function riskBadgeClass(probability: number) {
+  if (probability >= 0.95) return 'bg-red-500/20 text-red-200'
+  if (probability >= 0.85) return 'bg-orange-500/20 text-orange-200'
+  if (probability >= 0.65) return 'bg-yellow-500/20 text-yellow-100'
+  return 'bg-blue-500/20 text-blue-100'
+}
 
 export function PredictedHops() {
   const [queuedTargets, setQueuedTargets] = useState<Record<string, boolean>>({})
@@ -28,6 +36,7 @@ export function PredictedHops() {
         <p className="text-sm text-muted-foreground">
           {selectedNode ? `T-GNN top targets for ${selectedNode.label}` : 'Click a cluster node to inspect pre-freeze targets.'}
         </p>
+        <DataFreshness className="text-xs text-muted-foreground" />
       </CardHeader>
       <CardContent className="p-0">
         <ScrollArea className="h-[18rem]">
@@ -43,7 +52,7 @@ export function PredictedHops() {
                         <p className="font-semibold text-foreground">{hop.label}</p>
                         <p className="text-xs text-muted-foreground">{hop.id}</p>
                       </div>
-                      <Badge className="bg-emerald-500/20 text-emerald-200">{(hop.prob * 100).toFixed(1)}%</Badge>
+                      <Badge className={riskBadgeClass(hop.prob)}>{(hop.prob * 100).toFixed(1)}%</Badge>
                     </div>
                     <div className="mt-3 flex items-center justify-between gap-3">
                       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 
+import { DataFreshness } from '@/components/data-freshness'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useMuleStore } from '@/lib/mule-store'
 import type { MuleGraphPayload, MuleGraphNode } from '@/lib/mule-data'
 
@@ -144,6 +146,7 @@ export function MuleGraph() {
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Mule Cluster Graph View</p>
           <h3 className="mt-1 text-xl font-semibold text-foreground">Live Neo4j topology</h3>
+          <DataFreshness className="mt-2 text-xs text-muted-foreground" />
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-emerald-200">{graphData?.source ?? 'loading'}</span>
@@ -174,7 +177,15 @@ export function MuleGraph() {
         />
       ) : (
         <div className="relative z-10 flex h-[26rem] items-center justify-center rounded-2xl border border-border/60 bg-black/20 text-sm text-muted-foreground">
-          {isFetching ? 'Loading live graph…' : 'Graph unavailable'}
+          {isFetching ? (
+            <div className="w-full space-y-4 px-6">
+              <Skeleton className="h-6 w-48" />
+              <Skeleton className="h-48 w-full" />
+              <Skeleton className="h-4 w-64" />
+            </div>
+          ) : (
+            'Graph unavailable'
+          )}
         </div>
       )}
 
