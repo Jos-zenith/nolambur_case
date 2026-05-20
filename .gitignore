@@ -25,3 +25,4 @@ Multi-GNN/.git
 # Exclude python cache and compiled files in Multi-GNN
 Multi-GNN/__pycache__/
 *.pyc
+.env
