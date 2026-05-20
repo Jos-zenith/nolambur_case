@@ -146,6 +146,9 @@ importers:
       react-force-graph:
         specifier: ^1.48.2
         version: 1.48.2(aframe@1.7.1)(react@19.2.4)(three@0.184.0)
+      react-force-graph-2d:
+        specifier: ^1.25.0
+        version: 1.29.1(react@19.2.4)
       react-hook-form:
         specifier: ^7.54.1
         version: 7.71.1(react@19.2.4)
@@ -167,6 +170,9 @@ importers:
       zod:
         specifier: ^3.24.1
         version: 3.25.76
+      zustand:
+        specifier: ^5.0.6
+        version: 5.0.13(@types/react@19.2.14)(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4))
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4.2.0
@@ -3062,6 +3068,12 @@ packages:
     peerDependencies:
       react: ^19.2.4
 
+  react-force-graph-2d@1.29.1:
+    resolution: {integrity: sha512-1Rl/1Z3xy2iTHKj6a0jRXGyiI86xUti81K+jBQZ+Oe46csaMikp47L5AjrzA9hY9fNGD63X8ffrqnvaORukCuQ==}
+    engines: {node: '>=12'}
+    peerDependencies:
+      react: '*'
+
   react-force-graph@1.48.2:
     resolution: {integrity: sha512-VpBphuNN0X4BAl8c8h0r8M3XI18ExHfteNuUdCEzq0e9SORDi+5J2jpa2uNm9TQhoyXiUQjkIc1zvwIymaqdWw==}
     engines: {node: '>=12'}
@@ -3550,6 +3562,24 @@ packages:
 
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+
+  zustand@5.0.13:
+    resolution: {integrity: sha512-efI2tVaVQPqtOh114loML/Z80Y4NP3yc+Ff0fYiZJPauNeWZeIp/bRFD7I9bfmCOYBh/PHxlglQ9+wvlwnPikQ==}
+    engines: {node: '>=12.20.0'}
+    peerDependencies:
+      '@types/react': '>=18.0.0'
+      immer: '>=9.0.6'
+      react: '>=18.0.0'
+      use-sync-external-store: '>=1.2.0'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      immer:
+        optional: true
+      react:
+        optional: true
+      use-sync-external-store:
+        optional: true
 
 snapshots:
 
@@ -6561,6 +6591,13 @@ snapshots:
       react: 19.2.4
       scheduler: 0.27.0
 
+  react-force-graph-2d@1.29.1(react@19.2.4):
+    dependencies:
+      force-graph: 1.51.4
+      prop-types: 15.8.1
+      react: 19.2.4
+      react-kapsule: 2.5.7(react@19.2.4)
+
   react-force-graph@1.48.2(aframe@1.7.1)(react@19.2.4)(three@0.184.0):
     dependencies:
       3d-force-graph: 1.80.0
@@ -7200,3 +7237,9 @@ snapshots:
       zod: 3.25.76
 
   zod@3.25.76: {}
+
+  zustand@5.0.13(@types/react@19.2.14)(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4)):
+    optionalDependencies:
+      '@types/react': 19.2.14
+      react: 19.2.4
+      use-sync-external-store: 1.6.0(react@19.2.4)

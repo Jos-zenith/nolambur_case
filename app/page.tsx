@@ -1,4 +1,7 @@
 import { ArrowUpRight, BrainCircuit, Code2, Database, FileCode2, Layers3, LayoutDashboard, ServerCog, ShieldCheck, Sparkles, Workflow } from 'lucide-react'
+import { MuleGraph } from '@/components/MuleGraph'
+import { MulePulseFeed } from '@/components/MulePulseFeed'
+import { PredictedHops } from '@/components/PredictedHops'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -207,6 +210,24 @@ export default function Home() {
               </div>
             </CardContent>
           </Card>
+        </section>
+
+        <section className="space-y-4">
+          <div className="flex items-center gap-3">
+            <Badge className="rounded-full bg-emerald-500/20 px-3 py-1 text-sm font-medium text-emerald-200">
+              Live
+            </Badge>
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-[2rem]">Operations Surface</h2>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-[1.4fr_0.8fr]">
+            <MuleGraph />
+
+            <div className="space-y-4">
+              <MulePulseFeed />
+              <PredictedHops />
+            </div>
+          </div>
         </section>
 
         <section id="p1-section" className="space-y-4 border-t border-border/60 pt-2">
