@@ -48,19 +48,16 @@ EXAMPLES:
 2. Quick test (fewer epochs):
    python run_pretrain_finetune.py --quick
 
-3. Skip pretraining and load a saved checkpoint:
-    python run_pretrain_finetune.py --skip-pretrain --pretrain-checkpoint models/pretrained_gin_ibm.pt
-
-4. Use GAT architecture:
+3. Use GAT architecture:
    python run_pretrain_finetune.py --model gat
 
-5. Different IBM dataset:
+4. Different IBM dataset:
    python run_pretrain_finetune.py --ibm-variant HI-Medium
 
-6. No saving:
+5. No saving:
    python run_pretrain_finetune.py --no-save
 
-7. Verbose output:
+6. Verbose output:
    python run_pretrain_finetune.py --verbose
         """
     )
@@ -68,19 +65,11 @@ EXAMPLES:
     # Presets
     parser.add_argument(
         '--quick', action='store_true',
-        help='Quick test run: 10 pretrain epochs, 10 finetune epochs'
+        help='Quick test run: 10 pretrain epochs, 5 finetune epochs'
     )
     parser.add_argument(
         '--full', action='store_true', default=True,
         help='Full training run: 100 pretrain + 50 finetune epochs (default)'
-    )
-    parser.add_argument(
-        '--skip-pretrain', action='store_true',
-        help='Skip pretraining and load a saved checkpoint instead'
-    )
-    parser.add_argument(
-        '--pretrain-checkpoint', type=str, default='',
-        help='Path to a saved pretraining checkpoint to load when skipping pretraining'
     )
     
     # Model settings
@@ -135,14 +124,9 @@ EXAMPLES:
     cmd.extend(['--seed', str(args.seed)])
     
     if args.quick:
-        cmd.extend(['--pretrain-epochs', '10', '--finetune-epochs', '10'])
+        cmd.extend(['--epochs', '10'])  # Pretrain will use 10 epochs
     elif args.full:
-        cmd.extend(['--pretrain-epochs', '100', '--finetune-epochs', '50'])
-
-    if args.skip_pretrain:
-        cmd.append('--skip-pretrain')
-        if args.pretrain_checkpoint:
-            cmd.extend(['--pretrain-checkpoint', args.pretrain_checkpoint])
+        cmd.extend(['--epochs', '100'])  # Pretrain will use 100 epochs
     
     if not args.no_save:
         cmd.append('--save-model')
@@ -165,9 +149,6 @@ EXAMPLES:
     logging.info(f"Seed:              {args.seed}")
     logging.info(f"Save checkpoints:  {'Yes' if not args.no_save else 'No'}")
     logging.info(f"Output dir:        {args.output_dir}")
-    logging.info(f"Skip pretrain:     {'Yes' if args.skip_pretrain else 'No'}")
-    if args.pretrain_checkpoint:
-        logging.info(f"Pretrain ckpt:     {args.pretrain_checkpoint}")
     
     # Run training
     success = run_command(cmd, "Two-stage fine-tuning pipeline")

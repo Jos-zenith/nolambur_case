@@ -22,11 +22,11 @@ random.seed(42)
 # ──────────────────────────────────────────────────────────────────────────────
 # CONFIG — mirrors the Nolambur case stats
 # ──────────────────────────────────────────────────────────────────────────────
-NUM_VICTIMS          = 6          # victim accounts (Chennai / Nolambur)
-NUM_L1_MULES         = 8          # Layer-1 mule accounts (Haridwar / Rajasthan)
-NUM_L2_MULES         = 35         # Layer-2 cash-out accounts
-NUM_CLEAN_ACCOUNTS   = 500        # benign accounts to balance the graph
-NUM_CLEAN_TXN        = 4800       # benign transactions (keeps illicit ratio ~0.5%)
+NUM_VICTIMS          = 50         # victim accounts (Chennai / Nolambur)
+NUM_L1_MULES         = 80         # Layer-1 mule accounts (Haridwar / Rajasthan)
+NUM_L2_MULES         = 300        # Layer-2 cash-out accounts
+NUM_CLEAN_ACCOUNTS   = 3000       # benign accounts to balance the graph
+NUM_CLEAN_TXN        = 30000      # benign transactions (keeps illicit ratio around 1%)
 
 FRAUD_AMOUNT_MIN     = 500_000    # ₹5,00,000
 FRAUD_AMOUNT_MAX     = 550_000    # ₹5,50,000
@@ -229,4 +229,4 @@ with open("nolambur_stats.json", "w", encoding="utf-8") as f:
 
 print("✓ nolambur_stats.json written")
 print("\nNext step:")
-print("  python neo4j_ingest.py --csv nolambur_transactions.csv --labels nolambur_labels.csv")
+print("  python Multi-GNN/prepare_datasets.py")

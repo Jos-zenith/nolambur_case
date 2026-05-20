@@ -14,11 +14,27 @@ def get_data(args, data_config):
     3. PyG Data objects are created with the respective data splits.
     '''
 
+    script_dir = Path(__file__).resolve().parent
     aml_data_path = Path(data_config['paths']['aml_data'])
+    if not aml_data_path.is_absolute():
+        aml_data_path = (script_dir / aml_data_path).resolve()
+
     if aml_data_path.suffix.lower() == '.csv':
         transaction_file = str(aml_data_path)
     else:
-        transaction_file = str(aml_data_path / args.data / 'formatted_transactions.csv')  # replace this with your path to the respective AML data objects
+        dataset_name = str(args.data)
+        candidate_paths = [
+            aml_data_path / dataset_name / 'formatted_transactions.csv',
+            script_dir / dataset_name / 'formatted_transactions.csv',
+        ]
+        for candidate in candidate_paths:
+            if candidate.exists():
+                transaction_file = str(candidate)
+                break
+        else:
+            transaction_file = str(candidate_paths[0])
+
+    logging.info(f"Resolved transaction file: {transaction_file}")
     df_edges = pd.read_csv(transaction_file)
 
     logging.info(f'Available Edge Features: {df_edges.columns.tolist()}')

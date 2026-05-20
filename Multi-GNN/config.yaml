@@ -1,8 +1,6 @@
 model: GIN
 dataset: HI-Small
-epochs: 10
+epochs: 30
 batch_size: 1024
 learning_rate: 0.001
 loss_weights: [1.0, 150.0]
-pretrain_epochs: 10
-finetune_epochs: 10

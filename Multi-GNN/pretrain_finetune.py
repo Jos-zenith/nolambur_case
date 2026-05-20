@@ -25,6 +25,9 @@ import pandas as pd
 import numpy as np
 
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+
 def _format_seconds(seconds: float) -> str:
     minutes, secs = divmod(int(max(seconds, 0)), 60)
     hours, minutes = divmod(minutes, 60)
@@ -58,7 +61,11 @@ class TwoStageFinetuner:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
         # Load hyperparameters
-        with open(args.model_config or 'model_settings.json', 'r') as f:
+        model_config_path = Path(args.model_config) if args.model_config else SCRIPT_DIR / 'model_settings.json'
+        if not model_config_path.is_absolute():
+            model_config_path = SCRIPT_DIR / model_config_path
+
+        with open(model_config_path, 'r') as f:
             self.model_configs = json.load(f)
     
     def load_and_prepare_data(self, stage_name: str, dataset_name: str) -> Tuple:
@@ -154,8 +161,7 @@ class TwoStageFinetuner:
         params = config['params']
         
         # Use reduced epochs for fine-tuning or override
-        default_epochs = getattr(self.args, 'pretrain_epochs', None) or getattr(self.args, 'epochs', None) or 100
-        epochs = reduced_epochs or params.get('epochs', default_epochs)
+        epochs = reduced_epochs or params.get('epochs', self.args.epochs or 100)
         
         # Initialize model if not provided (pretraining case)
         if model is None:
@@ -358,29 +364,17 @@ class TwoStageFinetuner:
             tr_ibm, val_ibm, te_ibm, tr_inds_ibm, val_inds_ibm, te_inds_ibm = \
                 self.load_and_prepare_data("PRETRAIN", "HI-Small")
             
+            # Check if pretrained model already exists
             pretrain_save_path = Path(self.args.save_dir or "models") / f"pretrained_{self.args.model}_ibm.pt"
-            pretrain_checkpoint = Path(getattr(self.args, 'pretrain_checkpoint', '')).expanduser() if getattr(self.args, 'pretrain_checkpoint', None) else None
             pretrain_val_f1 = None
-
-            if getattr(self.args, 'skip_pretrain', False):
-                checkpoint_path = pretrain_checkpoint or pretrain_save_path
-                if not checkpoint_path.exists():
-                    raise FileNotFoundError(f"Pretrain checkpoint not found: {checkpoint_path}")
-                logging.info(f"[INFO] Skipping pretraining and loading weights from {checkpoint_path}")
-                num_features = _node_feature_tensor(tr_ibm).shape[1]
-                num_edge_features = _edge_attr_tensor(tr_ibm).shape[1]
-                pretrain_model = self.initialize_model(num_features, num_edge_features)
-                pretrain_model.load_state_dict(torch.load(checkpoint_path, map_location=self.device))
-                pretrain_val_f1 = 0.0
-                logging.info("✓ Pretrained weights loaded")
-            elif pretrain_save_path.exists():
+            
+            if pretrain_save_path.exists():
                 logging.info(f"[INFO] Found saved pretrain model at {pretrain_save_path}")
                 logging.info("[INFO] Skipping pretraining, loading weights...")
-                num_features = _node_feature_tensor(tr_ibm).shape[1]
-                num_edge_features = _edge_attr_tensor(tr_ibm).shape[1]
-                pretrain_model = self.initialize_model(num_features, num_edge_features)
+                pretrain_model = self.create_model()
                 pretrain_model.load_state_dict(torch.load(pretrain_save_path, map_location=self.device))
-                pretrain_val_f1 = 0.0
+                pretrain_model.to(self.device)
+                pretrain_val_f1 = 0.0  # Placeholder; not used for loaded model
                 logging.info("✓ Pretrained weights loaded")
             else:
                 logging.info("[INFO] No saved pretrain model found, starting pretraining...")
@@ -412,21 +406,21 @@ class TwoStageFinetuner:
             tr_nol, val_nol, te_nol, tr_inds_nol, val_inds_nol, te_inds_nol = \
                 self.load_and_prepare_data("FINETUNE", "nolambur")
             
+            # Check if finetuned model already exists
             finetune_save_path = Path(self.args.save_dir or "models") / f"finetuned_{self.args.model}_nolambur.pt"
             finetune_val_f1 = None
-
-            if finetune_save_path.exists() and getattr(self.args, 'skip_finetune', False):
+            
+            if finetune_save_path.exists():
                 logging.info(f"[INFO] Found saved finetune model at {finetune_save_path}")
                 logging.info("[INFO] Skipping fine-tuning, loading weights...")
-                num_features = _node_feature_tensor(tr_nol).shape[1]
-                num_edge_features = _edge_attr_tensor(tr_nol).shape[1]
-                finetuned_model = self.initialize_model(num_features, num_edge_features)
+                finetuned_model = self.create_model()
                 finetuned_model.load_state_dict(torch.load(finetune_save_path, map_location=self.device))
-                finetune_val_f1 = 0.0
+                finetuned_model.to(self.device)
+                finetune_val_f1 = 0.0  # Placeholder; not used for loaded model
                 logging.info("✓ Finetuned weights loaded")
             else:
-                logging.info("[INFO] Starting fine-tuning...")
-                finetune_epochs = getattr(self.args, 'finetune_epochs', 50)
+                logging.info("[INFO] No saved finetune model found, starting fine-tuning...")
+                # Fine-tune with pretrained weights and reduced learning rate
                 finetuned_model, finetune_val_f1 = self.train_stage(
                     stage_name="FINETUNE",
                     tr_data=tr_nol,
@@ -435,8 +429,8 @@ class TwoStageFinetuner:
                     tr_inds=tr_inds_nol,
                     val_inds=val_inds_nol,
                     te_inds=te_inds_nol,
-                    model=pretrain_model,
-                    reduced_epochs=finetune_epochs
+                    model=pretrain_model,  # Use pretrained model
+                    reduced_epochs=50  # Fewer epochs for fine-tuning
                 )
             
             logging.info(f"\n✓ Fine-tuning complete. Best Val F1: {finetune_val_f1:.4f}")
@@ -490,16 +484,6 @@ def get_pretrain_parser():
                        help='Max pretraining epochs (default: 100)')
     parser.add_argument('--batch-size', type=int, default=256,
                        help='Batch size (default: 256)')
-    parser.add_argument('--pretrain-epochs', type=int, default=10,
-                       help='Max pretraining epochs (default: 10)')
-    parser.add_argument('--finetune-epochs', type=int, default=10,
-                       help='Max fine-tuning epochs (default: 10)')
-    parser.add_argument('--skip-pretrain', action='store_true', default=False,
-                       help='Skip pretraining and load a saved checkpoint instead')
-    parser.add_argument('--pretrain-checkpoint', type=str, default='',
-                       help='Path to a saved pretraining checkpoint to load when skipping pretraining')
-    parser.add_argument('--skip-finetune', action='store_true', default=False,
-                       help='Skip fine-tuning and load a saved checkpoint instead')
     parser.add_argument('--save-model', action='store_true', default=True,
                        help='Save model checkpoints')
     parser.add_argument('--save-dir', type=str, default='models',
@@ -517,7 +501,8 @@ if __name__ == "__main__":
     parser = get_pretrain_parser()
     args = parser.parse_args()
     
-    with open('data_config.json', 'r') as f:
+    data_config_path = SCRIPT_DIR / 'data_config.json'
+    with open(data_config_path, 'r') as f:
         data_config = json.load(f)
     
     logger_setup()

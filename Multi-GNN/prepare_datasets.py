@@ -12,6 +12,7 @@ It avoids pandas for the heavy formatting step so large files do not trigger mem
 
 from __future__ import annotations
 
+import argparse
 import csv
 import logging
 from collections import OrderedDict
@@ -141,32 +142,49 @@ def convert_ibm_variant(base_dir: Path, variant: str) -> Optional[Path]:
 
 def convert_nolambur(base_dir: Path) -> Optional[Path]:
     """Build Nolambur formatted_transactions.csv from the flat transaction and label files."""
-    tx_path = base_dir / "nolambur_transactions.csv"
-    labels_path = base_dir / "nolambur_labels.csv"
     out_dir = base_dir / "nolambur"
     out_path = out_dir / "formatted_transactions.csv"
 
-    if not tx_path.exists():
-        logging.warning("Nolambur transactions missing: %s", tx_path)
+    source_candidates = [base_dir, base_dir.parent]
+    selected_source: Optional[Path] = None
+    selected_score = -1
+    selected_tx_count = 0
+    selected_label_count = 0
+
+    for source_base in source_candidates:
+        tx_candidate = source_base / "nolambur_transactions.csv"
+        labels_candidate = source_base / "nolambur_labels.csv"
+        if not tx_candidate.exists() or not labels_candidate.exists():
+            continue
+
+        tx_count = sum(1 for _ in csv_rows(tx_candidate))
+        label_count = sum(1 for _ in csv_rows(labels_candidate))
+        score = min(tx_count, label_count)
+        if score > selected_score:
+            selected_source = source_base
+            selected_score = score
+            selected_tx_count = tx_count
+            selected_label_count = label_count
+
+    if selected_source is None:
+        logging.warning("Nolambur transactions/labels missing under %s or %s", base_dir, base_dir.parent)
         return None
-    if not labels_path.exists():
-        logging.warning("Nolambur labels missing: %s", labels_path)
-        return None
-    if out_path.exists():
-        logging.info("Nolambur already formatted: %s", out_path)
-        return out_path
+
+    tx_path = selected_source / "nolambur_transactions.csv"
+    labels_path = selected_source / "nolambur_labels.csv"
 
     logging.info("Formatting Nolambur from %s + %s", tx_path.name, labels_path.name)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    tx_count = sum(1 for _ in csv_rows(tx_path))
-    label_count = sum(1 for _ in csv_rows(labels_path))
-    if tx_count != label_count:
+    if selected_tx_count != selected_label_count:
         logging.warning(
             "Row count mismatch for Nolambur: %d transactions vs %d labels. Using minimum length.",
-            tx_count,
-            label_count,
+            selected_tx_count,
+            selected_label_count,
         )
+
+    if out_path.exists():
+        logging.info("Overwriting Nolambur formatted file: %s", out_path)
 
     first_ts: Optional[datetime] = None
     id_map: Dict[str, int] = OrderedDict()
@@ -219,6 +237,14 @@ def convert_nolambur(base_dir: Path) -> Optional[Path]:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Prepare transaction datasets for training.")
+    parser.add_argument(
+        "--nolambur-only",
+        action="store_true",
+        help="Format only Nolambur data, skip IBM variants (faster for testing).",
+    )
+    args = parser.parse_args()
+    
     setup_logging()
     root = resolve_workspace_root()
     ibm_base = (root / ".." / "ibm-transactions-for-anti-money-laundering-aml").resolve()
@@ -226,11 +252,14 @@ def main() -> int:
     variants = ["HI-Large", "HI-Medium", "HI-Small", "LI-Large", "LI-Medium", "LI-Small"]
     created: List[Path] = []
 
-    logging.info("Preparing IBM AML data under %s", ibm_base)
-    for variant in variants:
-        out = convert_ibm_variant(ibm_base, variant)
-        if out is not None:
-            created.append(out)
+    if not args.nolambur_only:
+        logging.info("Preparing IBM AML data under %s", ibm_base)
+        for variant in variants:
+            out = convert_ibm_variant(ibm_base, variant)
+            if out is not None:
+                created.append(out)
+    else:
+        logging.info("Skipping IBM AML variants (--nolambur-only flag set)")
 
     logging.info("Preparing Nolambur data under %s", root)
     nol = convert_nolambur(root)
