@@ -141,47 +141,40 @@ def convert_ibm_variant(base_dir: Path, variant: str) -> Optional[Path]:
 
 
 def convert_nolambur(base_dir: Path) -> Optional[Path]:
-    """Build Nolambur formatted_transactions.csv from the flat transaction and label files."""
+    """Build Nolambur formatted_transactions.csv from the flat transaction file.
+
+    nolambur_transactions.csv carries its own per-transaction `is_fraud` column
+    (written by nolambur_synthetic_gen.py) — that is the correct edge-level
+    ground truth. nolambur_labels.csv is a *separate*, node-level file (one row
+    per account, with an `is_mule` column, no `is_fraud`/`Is Laundering` column
+    at all) — it has no row-for-row correspondence with the transactions file,
+    so it must never be zipped positionally against it. An earlier version of
+    this function did exactly that: it zipped transaction row i with label row
+    i and read a non-existent `is_fraud`/`Is Laundering` key off the label row,
+    which silently defaulted to "0" for every row. The result was a
+    formatted_transactions.csv where every single transaction was labeled
+    legitimate — 89% of the real transactions were also dropped by truncating
+    to the shorter (account-count) file length. Any F1 computed against that
+    file is meaningless (zero true positives are even possible).
+    """
     out_dir = base_dir / "nolambur"
     out_path = out_dir / "formatted_transactions.csv"
 
     source_candidates = [base_dir, base_dir.parent]
-    selected_source: Optional[Path] = None
-    selected_score = -1
-    selected_tx_count = 0
-    selected_label_count = 0
-
+    tx_path: Optional[Path] = None
     for source_base in source_candidates:
-        tx_candidate = source_base / "nolambur_transactions.csv"
-        labels_candidate = source_base / "nolambur_labels.csv"
-        if not tx_candidate.exists() or not labels_candidate.exists():
-            continue
+        candidate = source_base / "nolambur_transactions.csv"
+        if candidate.exists():
+            tx_path = candidate
+            break
 
-        tx_count = sum(1 for _ in csv_rows(tx_candidate))
-        label_count = sum(1 for _ in csv_rows(labels_candidate))
-        score = min(tx_count, label_count)
-        if score > selected_score:
-            selected_source = source_base
-            selected_score = score
-            selected_tx_count = tx_count
-            selected_label_count = label_count
-
-    if selected_source is None:
-        logging.warning("Nolambur transactions/labels missing under %s or %s", base_dir, base_dir.parent)
+    if tx_path is None:
+        logging.warning("nolambur_transactions.csv missing under %s or %s", base_dir, base_dir.parent)
         return None
 
-    tx_path = selected_source / "nolambur_transactions.csv"
-    labels_path = selected_source / "nolambur_labels.csv"
-
-    logging.info("Formatting Nolambur from %s + %s", tx_path.name, labels_path.name)
+    tx_count = sum(1 for _ in csv_rows(tx_path))
+    logging.info("Formatting Nolambur from %s (%d transactions, using its own is_fraud column)", tx_path.name, tx_count)
     out_dir.mkdir(parents=True, exist_ok=True)
-
-    if selected_tx_count != selected_label_count:
-        logging.warning(
-            "Row count mismatch for Nolambur: %d transactions vs %d labels. Using minimum length.",
-            selected_tx_count,
-            selected_label_count,
-        )
 
     if out_path.exists():
         logging.info("Overwriting Nolambur formatted file: %s", out_path)
@@ -211,13 +204,15 @@ def convert_nolambur(base_dir: Path) -> Optional[Path]:
         ])
 
         row_count = 0
-        for idx, (tx, label) in enumerate(zip(csv_rows(tx_path), csv_rows(labels_path))):
+        fraud_count = 0
+        for idx, tx in enumerate(csv_rows(tx_path)):
             ts = parse_timestamp(first_nonempty(tx, ["timestamp", "Timestamp"]))
             if first_ts is None:
                 first_ts = datetime(ts.year, ts.month, ts.day)
             ts_value = int((ts - first_ts).total_seconds()) + 10
 
             amount = float(first_nonempty(tx, ["amount_inr", "Amount", "amount"], "0") or 0)
+            is_fraud = int(float(first_nonempty(tx, ["is_fraud", "Is Laundering"], "0") or 0))
             writer.writerow([
                 idx,
                 encode(first_nonempty(tx, ["sender_id", "from_id", "sender_vpa"])),
@@ -228,11 +223,15 @@ def convert_nolambur(base_dir: Path) -> Optional[Path]:
                 amount,
                 0,
                 0,
-                int(float(first_nonempty(label, ["is_fraud", "Is Laundering"], "0") or 0)),
+                is_fraud,
             ])
             row_count += 1
+            fraud_count += is_fraud
 
-    logging.info("Wrote %s (%d rows)", out_path, row_count)
+    logging.info(
+        "Wrote %s (%d rows, %d labeled fraud = %.2f%%)",
+        out_path, row_count, fraud_count, (100 * fraud_count / row_count) if row_count else 0.0,
+    )
     return out_path
 
 

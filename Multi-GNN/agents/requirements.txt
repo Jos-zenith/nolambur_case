@@ -1,0 +1,3 @@
+# Orchestrator dependencies (in addition to the Multi-GNN env).
+anthropic>=0.115
+requests>=2.28

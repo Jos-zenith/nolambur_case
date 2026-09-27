@@ -14,13 +14,25 @@ def _has_neighbor_sampler_backend() -> bool:
 
 
 class _FullGraphBatchLoader:
-    def __init__(self, data, input_ids, edge_label_index, batch_size, shuffle, transform):
+    def __init__(self, data, input_ids, edge_label_index, batch_size, shuffle, transform, local_edge_ids=None):
         self.data = data
         self.input_ids = input_ids
         self.edge_label_index = edge_label_index
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.transform = transform
+        # The caller (get_loaders) knows how `self.data` was assembled, so it
+        # can hand us -- for each seed edge in input_ids order -- the correct
+        # position of that same edge within self.data's OWN (locally re-based)
+        # edge_attr/EdgeID array. Without this, callers were doing
+        # `input_ids[batch.input_id]`, which only happens to be right when
+        # input_ids is itself a contiguous arange (e.g. a chronological
+        # train split of pre-sorted data); for any other split (random,
+        # stratified, or a val split whose data object is offset by the train
+        # rows preceding it) that silently looked up the wrong -- or an
+        # out-of-range -- row. Defaulting to input_ids preserves old behavior
+        # for callers that don't pass this.
+        self.local_edge_ids = local_edge_ids if local_edge_ids is not None else input_ids
 
     def __len__(self):
         if self.input_ids.numel() == 0:
@@ -31,15 +43,15 @@ class _FullGraphBatchLoader:
         order = torch.randperm(self.input_ids.numel()) if self.shuffle else torch.arange(self.input_ids.numel())
         for start in range(0, order.numel(), self.batch_size):
             batch_positions = order[start:start + self.batch_size]
-            batch_input_id = self.input_ids[batch_positions]
+            batch_local_edge_ids = self.local_edge_ids[batch_positions]
 
             batch = self.data.clone()
             if isinstance(batch, HeteroData):
                 batch['node', 'to', 'node'].edge_label_index = self.edge_label_index[:, batch_positions]
-                batch['node', 'to', 'node'].input_id = batch_positions
+                batch['node', 'to', 'node'].input_id = batch_local_edge_ids
             else:
                 batch.edge_label_index = self.edge_label_index[:, batch_positions]
-                batch.input_id = batch_positions
+                batch.input_id = batch_local_edge_ids
 
             if self.transform is not None:
                 batch = self.transform(batch)
@@ -102,18 +114,41 @@ def add_arange_ids(data_list):
 
 def get_loaders(tr_data, val_data, te_data, tr_inds, val_inds, te_inds, transform, args):
     if not _has_neighbor_sampler_backend():
+        # val_data was built (in data_loading.get_data) by concatenating tr_inds
+        # then val_inds, so its edge_index only spans len(tr_inds)+len(val_inds)
+        # edges, re-based to start at 0 -- unlike te_data, which keeps the full,
+        # globally-indexed graph. val_inds itself still holds the *original*
+        # global positions (needed later to look up each edge's EdgeID for seed
+        # masking), so it must not be used directly to slice val_data.edge_index:
+        # for any split where val_inds' global positions exceed val_data's
+        # length, that raises an out-of-bounds IndexError. The val portion of
+        # val_data is always the tail block right after the tr_inds edges.
+        val_local_inds = torch.arange(tr_inds.numel(), tr_inds.numel() + val_inds.numel())
+
         if isinstance(tr_data, HeteroData):
             tr_edge_label_index = tr_data['node', 'to', 'node'].edge_index
-            val_edge_label_index = val_data['node', 'to', 'node'].edge_index[:, val_inds]
+            val_edge_label_index = val_data['node', 'to', 'node'].edge_index[:, val_local_inds]
             te_edge_label_index = te_data['node', 'to', 'node'].edge_index[:, te_inds]
         else:
             tr_edge_label_index = tr_data.edge_index
-            val_edge_label_index = val_data.edge_index[:, val_inds]
+            val_edge_label_index = val_data.edge_index[:, val_local_inds]
             te_edge_label_index = te_data.edge_index[:, te_inds]
 
-        tr_loader = _FullGraphBatchLoader(tr_data, tr_inds, tr_edge_label_index, args.batch_size, True, transform)
-        val_loader = _FullGraphBatchLoader(val_data, val_inds, val_edge_label_index, args.batch_size, False, transform)
-        te_loader = _FullGraphBatchLoader(te_data, te_inds, te_edge_label_index, args.batch_size, False, transform)
+        # Correct local EdgeID (position within each loader's own `data` object,
+        # matching add_arange_ids' per-object 0-based relabeling) for each seed
+        # edge, in the same order as tr_inds/val_inds/te_inds:
+        #  - tr_data's rows ARE tr_inds' rows, in that order -> local id == position.
+        #  - val_data's rows are [tr_inds' rows][val_inds' rows] (see get_data) ->
+        #    val's local ids are offset by len(tr_inds) (this is val_local_inds).
+        #  - te_data is the full, globally-ordered graph -> local id == the
+        #    original global row number, i.e. te_inds itself.
+        tr_local_edge_ids = torch.arange(tr_inds.numel())
+        val_local_edge_ids = val_local_inds
+        te_local_edge_ids = te_inds
+
+        tr_loader = _FullGraphBatchLoader(tr_data, tr_inds, tr_edge_label_index, args.batch_size, True, transform, local_edge_ids=tr_local_edge_ids)
+        val_loader = _FullGraphBatchLoader(val_data, val_inds, val_edge_label_index, args.batch_size, False, transform, local_edge_ids=val_local_edge_ids)
+        te_loader = _FullGraphBatchLoader(te_data, te_inds, te_edge_label_index, args.batch_size, False, transform, local_edge_ids=te_local_edge_ids)
         return tr_loader, val_loader, te_loader
 
     if isinstance(tr_data, HeteroData):

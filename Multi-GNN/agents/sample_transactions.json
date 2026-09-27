@@ -1,0 +1,20 @@
+{
+  "fraud": {
+    "_note": "Real row from nolambur_transactions.csv - a victim->L1 burst that fits the digital-arrest pattern (~5.5L, Tamil Nadu -> Rajasthan).",
+    "sender_vpa": "cs4cc5o7@okaxis",
+    "receiver_vpa": "ebb9eitn@upi",
+    "amount_inr": 547957,
+    "timestamp": "2024-03-15T10:32:24",
+    "sender_state": "Tamil Nadu",
+    "receiver_state": "Rajasthan"
+  },
+  "clean": {
+    "_note": "Real clean row - ordinary cross-state retail transfer, no burst pattern.",
+    "sender_vpa": "q2any1yc@upi",
+    "receiver_vpa": "hywm7s6n@ybl",
+    "amount_inr": 17486,
+    "timestamp": "2024-03-17T05:22:07",
+    "sender_state": "Maharashtra",
+    "receiver_state": "West Bengal"
+  }
+}

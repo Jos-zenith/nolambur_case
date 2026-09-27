@@ -1,96 +1,77 @@
 'use client'
 
-import { useState } from 'react'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { CaseListTable } from '@/components/CaseListTable'
-import { CaseTimelinePanel } from '@/components/CaseTimelinePanel'
-import { EvidenceLockerPanel } from '@/components/EvidenceLockerPanel'
-import { BiometricReplayPanel } from '@/components/BiometricReplayPanel'
-import { BulkActionsToolbar } from '@/components/BulkActionsToolbar'
-import { CaseStatusPipeline } from '@/components/CaseStatusPipeline'
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
+
+import { BackendGate } from '@/components/rail/BackendGate'
+import { stamp } from '@/lib/rail/format'
+import { useRail } from '@/lib/rail/store'
+import type { Snapshot } from '@/lib/rail/types'
 
 export default function CasesPage() {
-  const [selectedCase, setSelectedCase] = useState<any>(null)
-  const [isDetailOpen, setIsDetailOpen] = useState(false)
-  const [selectedCases, setSelectedCases] = useState<string[]>([])
+  const [snap, setSnap] = useState<Snapshot | null>(null)
+  const backend = useRail(s => s.backend)
+  const auditCount = useRail(s => s.audit.length)
 
-  const handleSelectCase = (caseItem: any) => {
-    setSelectedCase(caseItem)
-    setIsDetailOpen(true)
-  }
+  useEffect(() => {
+    if (backend !== 'live') return
+    fetch('/api/rail/snapshot', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(setSnap)
+      .catch(() => {})
+  }, [backend, auditCount])
 
-  const handleSelectMultiple = (caseIds: string[]) => {
-    setSelectedCases(caseIds)
-  }
+  const alerts = Object.fromEntries((snap?.alerts ?? []).map(a => [a.id, a]))
+  const cases = [...(snap?.cases ?? [])].sort((a, b) => b.openedT - a.openedT)
 
   return (
-    <div className="space-y-4">
-      <Tabs defaultValue="list" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="list">Case List</TabsTrigger>
-          <TabsTrigger value="pipeline">Pipeline View</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="list" className="space-y-4">
-          <CaseListTable onSelectCase={handleSelectCase} onSelectMultiple={handleSelectMultiple} />
-        </TabsContent>
-
-        <TabsContent value="pipeline" className="space-y-4">
-          <CaseStatusPipeline />
-        </TabsContent>
-      </Tabs>
-
-      {/* Detail Panel */}
-      {selectedCase && isDetailOpen && (
-        <div className="space-y-6 fixed right-0 top-0 h-screen w-full max-w-3xl transform overflow-y-auto border-l border-border/60 bg-background/95 backdrop-blur-md z-50">
-          <div className="sticky top-0 border-b border-border/60 bg-background/80 backdrop-blur-sm flex items-center justify-between p-6">
-            <div>
-              <p className="text-xs text-muted-foreground">Case ID</p>
-              <h2 className="mt-1 font-mono text-lg font-semibold text-primary">{selectedCase.id}</h2>
-            </div>
-            <button
-              onClick={() => setIsDetailOpen(false)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              ✕
-            </button>
-          </div>
-
-          <div className="space-y-6 px-6 pb-6">
-            {/* Tabs within detail */}
-            <Tabs defaultValue="timeline" className="w-full">
-              <TabsList className="grid w-full max-w-2xl grid-cols-3">
-                <TabsTrigger value="timeline">Timeline</TabsTrigger>
-                <TabsTrigger value="biometric">Biometric</TabsTrigger>
-                <TabsTrigger value="evidence">Evidence</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="timeline" className="space-y-4">
-                <CaseTimelinePanel />
-              </TabsContent>
-
-              <TabsContent value="biometric" className="space-y-4">
-                <BiometricReplayPanel />
-              </TabsContent>
-
-              <TabsContent value="evidence" className="space-y-4">
-                <EvidenceLockerPanel />
-              </TabsContent>
-            </Tabs>
-          </div>
-        </div>
-      )}
-
-      <BulkActionsToolbar
-        selectedCount={selectedCases.length}
-        onFreezeAll={() => alert(`Freezing ${selectedCases.length} cases...`)}
-        onExportReport={() => alert(`Exporting ${selectedCases.length} reports...`)}
-        onFileWith1930={() => alert(`Filing ${selectedCases.length} cases with 1930...`)}
-        onClearSelection={() => {
-          setSelectedCases([])
-          handleSelectMultiple([])
-        }}
-      />
+    <div className="grid gap-4">
+      <div>
+        <h1 className="text-[18px] font-semibold">Cases</h1>
+        <p className="mt-1 max-w-3xl text-[13px] text-muted-foreground">
+          A case opens when an analyst escalates or freezes. Accounts that sent to or received from an account already in a case join it. Each case
+          exports an evidence pack and can file a 1930 report through the agent tools.
+        </p>
+      </div>
+      <BackendGate>
+        <section className="border bg-card">
+          {!snap ? (
+            <div className="m-4 h-24 animate-pulse rounded-sm bg-muted" />
+          ) : cases.length === 0 ? (
+            <p className="p-4 text-[13px] text-muted-foreground">
+              No cases yet. Escalate or freeze an alert in the{' '}
+              <Link href="/console" className="text-primary underline underline-offset-2">alert queue</Link> to open one.
+            </p>
+          ) : (
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b text-left text-[12px] text-muted-foreground">
+                  <th className="px-4 py-2 font-normal">Case</th>
+                  <th className="px-4 py-2 font-normal">Opened (replay time)</th>
+                  <th className="px-4 py-2 font-normal">Accounts</th>
+                  <th className="px-4 py-2 font-normal">Alerts</th>
+                  <th className="px-4 py-2 font-normal">1930 report</th>
+                  <th className="px-4 py-2 font-normal" />
+                </tr>
+              </thead>
+              <tbody>
+                {cases.map(c => (
+                  <tr key={c.id} className="border-b align-top last:border-0">
+                    <td className="px-4 py-2 font-mono">{c.id}</td>
+                    <td className="px-4 py-2 font-mono text-[12px]">{stamp(c.openedT)}</td>
+                    <td className="px-4 py-2 font-mono text-[12px]">{c.alertIds.map(id => alerts[id]?.vpa).filter((v, i, xs) => v && xs.indexOf(v) === i).join(', ')}</td>
+                    <td className="px-4 py-2 tabular-nums">{c.alertIds.length}</td>
+                    <td className="px-4 py-2 font-mono text-[12px]">{c.report ? String(c.report.acknowledgement_no ?? 'filed') : '—'}</td>
+                    <td className="px-4 py-2 text-right">
+                      <Link href={`/cases/${c.id}`} className="text-primary underline underline-offset-2">Evidence pack</Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      </BackendGate>
     </div>
   )
 }

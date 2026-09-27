@@ -128,15 +128,28 @@ python nolambur_synthetic_gen.py
 
 ---
 
-## Dashboard Pages
+## Merchant Risk Console
 
-| Page | Purpose |
+The web app is a risk console for a payment aggregator, driven entirely by the Python backend.
+`Multi-GNN/rail_engine.py` replays `nolambur_transactions.csv` in timestamp order, attaches the GIN
+checkpoint's score to every row, runs four detectors, and serves `/rail/*` on the GNN bridge. Analyst
+actions go through `agents/tools_impl.py` and land in `agents/action_log.jsonl`.
+
+```bash
+cd Multi-GNN && python bridge_api.py   # :8001, ~30 s to score the graph on CPU
+npm run dev                            # the console proxies /api/rail/* to the bridge
+```
+
+| Page | What it does |
 |---|---|
-| **Command Center** | Live alert feed, burst activity chart, geo origin heatmap |
-| **Cluster Graph** | Force-directed mule chain visualisation, predicted next-hop accounts |
-| **Account Drill-down** | Per-account Mule Pulse breakdown, transaction log, freeze action |
-| **Case Timeline** | Full incident reconstruction, fund flow, cross-state ZKP status |
-| **Model Health** | F1 drift monitoring, training pipeline status, retrain trigger |
+| **Alert queue** `/console` | Replay controls, live metrics, ranked alerts with money trail, evidence rows (CSV row + GNN score), agent investigation, clear / escalate / freeze |
+| **Onboarding check** `/onboarding` | Checks a merchant's settlement VPAs for direct or second-hop links to flagged accounts |
+| **Cases** `/cases` | Evidence pack per case; files a 1930 report and notifies an officer through the agent tools |
+| **Model & evaluation** `/model` | Training log, held-out test result, score distributions, rules vs model against the labels, and why the numbers are high |
+
+Measured on the full dataset (account level, labels never read by the detectors): rules alone reach
+60% recall at 87% precision; adding the model's leads reaches 85% recall at 87% precision. The median
+alert fires 2m 33s before the mule forwards the money.
 
 ---
 

@@ -32,7 +32,14 @@ export function useMulePulse(): PulseState {
       try {
         const payload = JSON.parse(event.data) as MulePulseAlert
         const currentAlerts = useMuleStore.getState().alerts
-        setAlerts([payload, ...currentAlerts].slice(0, 50))
+        // The replay feed (real bridge or local fallback) cycles through a small,
+        // fixed set of events on a loop, so the same id resurfaces once it wraps
+        // around. Drop the stale copy before prepending the fresh one -- otherwise
+        // two <article key={alert.id}> rows share a key and React starts reusing/
+        // misplacing DOM nodes between them, which shows up as the feed's rows
+        // jumping or misaligning on every tick.
+        const deduped = currentAlerts.filter(alert => alert.id !== payload.id)
+        setAlerts([payload, ...deduped].slice(0, 50))
 
         if (!seenAlertIds.current.has(payload.id)) {
           seenAlertIds.current.add(payload.id)

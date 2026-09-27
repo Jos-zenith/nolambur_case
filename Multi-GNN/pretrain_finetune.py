@@ -16,7 +16,7 @@ from util import create_parser, set_seed, logger_setup
 from data_loading import get_data
 from data_util import GraphData, create_hetero_obj
 from models import GINe, PNA, GATe, RGCN
-from train_util import AddEgoIds, add_arange_ids, get_loaders, evaluate_homo, evaluate_hetero, save_model, load_model
+from train_util import AddEgoIds, add_arange_ids, get_loaders, evaluate_homo, evaluate_hetero, save_model, load_model, _has_neighbor_sampler_backend
 from training import train_homo, train_hetero
 import tqdm
 from sklearn.metrics import f1_score
@@ -153,8 +153,9 @@ class TwoStageFinetuner:
         
         return model.to(self.device)
     
-    def train_stage(self, stage_name: str, tr_data, val_data, te_data, 
-                   tr_inds, val_inds, te_inds, model=None, reduced_epochs=None):
+    def train_stage(self, stage_name: str, tr_data, val_data, te_data,
+                   tr_inds, val_inds, te_inds, model=None, reduced_epochs=None,
+                   class_weight_override=None):
         """Train for one stage (pretraining or fine-tuning)"""
         
         config = self.model_configs[self.args.model.lower()]
@@ -185,9 +186,19 @@ class TwoStageFinetuner:
         
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
         
-        # Setup loss with class weights
-        w_ce1 = params['w_ce1']
-        w_ce2 = params['w_ce2']
+        # Setup loss with class weights.
+        # model_settings.json's w_ce2 (150) is shared with the official IBM
+        # AML pretrain stage, which is a much more imbalanced dataset (0.10%
+        # illicit) than Nolambur's finetune stage (~1.16%) -- callers that
+        # need a different weight for this stage specifically (e.g. a
+        # dataset-derived inverse-frequency weight) can pass class_weight_override
+        # instead of changing the shared config.
+        if class_weight_override is not None:
+            w_ce1, w_ce2 = class_weight_override
+            logging.info(f"  Using overridden loss weights: [{w_ce1:.2f}, {w_ce2:.2f}] (config default was {params['w_ce2']:.2f})")
+        else:
+            w_ce1 = params['w_ce1']
+            w_ce2 = params['w_ce2']
         class_weights = torch.tensor([w_ce1, w_ce2], device=self.device)
         loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights)
         
@@ -237,9 +248,20 @@ class TwoStageFinetuner:
                 batch_start = time.perf_counter()
                 optimizer.zero_grad()
                 
-                # Get mask for seed edges
-                inds = tr_inds.detach().cpu()
-                batch_edge_inds = inds[batch.input_id.detach().cpu()]
+                # Get mask for seed edges.
+                # With the neighbor-sampler backend (pyg_lib/torch_sparse), PyG's
+                # LinkNeighborLoader sets batch.input_id to positions into
+                # tr_inds, so it must be translated via tr_inds[...]. Our
+                # no-backend fallback (_FullGraphBatchLoader) instead sets
+                # batch.input_id directly to the correct local EdgeID already
+                # (see train_util.get_loaders) -- translating it again via
+                # tr_inds[...] there would look up the wrong (or out-of-range)
+                # row for any split that isn't a plain prefix of the data.
+                if _has_neighbor_sampler_backend():
+                    inds = tr_inds.detach().cpu()
+                    batch_edge_inds = inds[batch.input_id.detach().cpu()]
+                else:
+                    batch_edge_inds = batch.input_id.detach().cpu()
                 batch_edge_ids = _edge_attr_tensor(tr_loader.data).detach().cpu()[batch_edge_inds, 0]
                 mask = torch.isin(batch.edge_attr[:, 0].detach().cpu(), batch_edge_ids)
                 
@@ -312,7 +334,7 @@ class TwoStageFinetuner:
         
         return model, best_val_f1
     
-    def _evaluate_stage(self, loader, inds, model, data):
+    def _evaluate_stage(self, loader, inds, model, data, return_details=False):
         """Evaluate model on a dataset"""
         model.eval()
         preds = []
@@ -320,8 +342,15 @@ class TwoStageFinetuner:
         
         with torch.no_grad():
             for batch in loader:
-                inds_cpu = inds.detach().cpu()
-                batch_edge_inds = inds_cpu[batch.input_id.detach().cpu()]
+                # See the matching comment in the training loop above: only the
+                # neighbor-sampler backend needs batch.input_id translated
+                # through `inds`; our fallback loader already hands back the
+                # correct local EdgeID directly.
+                if _has_neighbor_sampler_backend():
+                    inds_cpu = inds.detach().cpu()
+                    batch_edge_inds = inds_cpu[batch.input_id.detach().cpu()]
+                else:
+                    batch_edge_inds = batch.input_id.detach().cpu()
                 batch_edge_ids = _edge_attr_tensor(loader.data).detach().cpu()[batch_edge_inds, 0]
                 mask = torch.isin(batch.edge_attr[:, 0].detach().cpu(), batch_edge_ids)
                 
@@ -337,7 +366,17 @@ class TwoStageFinetuner:
         
         pred_all = torch.cat(preds, dim=0).detach().cpu().numpy()
         ground_truth_all = torch.cat(ground_truths, dim=0).detach().cpu().numpy()
-        
+
+        if return_details:
+            from sklearn.metrics import precision_score, recall_score
+            return {
+                "f1": f1_score(ground_truth_all, pred_all, zero_division=0),
+                "precision": precision_score(ground_truth_all, pred_all, zero_division=0),
+                "recall": recall_score(ground_truth_all, pred_all, zero_division=0),
+                "n": int(len(ground_truth_all)),
+                "n_positive": int(ground_truth_all.sum()),
+                "n_flagged": int(pred_all.sum()),
+            }
         return f1_score(ground_truth_all, pred_all)
     
     def run(self):

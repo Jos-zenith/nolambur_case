@@ -37,6 +37,15 @@ def get_data(args, data_config):
     logging.info(f"Resolved transaction file: {transaction_file}")
     df_edges = pd.read_csv(transaction_file)
 
+    # The day-based split below (and the seed-edge masking in train_util's
+    # fallback loader) both assume that a day's rows form one contiguous
+    # index range, i.e. the file is already sorted by Timestamp. That holds
+    # for the IBM AML export but not for every generator (e.g. Nolambur's
+    # synthetic CSV is written in generation order, not time order) --
+    # sorting here makes the assumption hold universally instead of silently
+    # producing out-of-range indices downstream when it doesn't.
+    df_edges = df_edges.sort_values('Timestamp', kind='mergesort').reset_index(drop=True)
+
     logging.info(f'Available Edge Features: {df_edges.columns.tolist()}')
 
     df_edges['Timestamp'] = df_edges['Timestamp'] - df_edges['Timestamp'].min()
@@ -106,6 +115,35 @@ def get_data(args, data_config):
     val_inds = torch.cat(split_inds[1])
     te_inds = torch.cat(split_inds[2])
 
+    # The day-based split above assumes fraud is spread across many days, which
+    # holds for the multi-week IBM AML corpus but not for a dataset modelling a
+    # single short incident (e.g. Nolambur's real ~4-hour burst): every
+    # positive example can land in one day, leaving val and/or test with zero
+    # fraud examples. F1 on a split with no positives is undefined (sklearn
+    # reports 0.0 regardless of the model), which silently makes validation-
+    # based model selection and the reported test F1 meaningless. Detect that
+    # and fall back to a random stratified 60/20/20 split, which is the
+    # statistically appropriate choice once temporal structure can't be relied
+    # on for splitting.
+    if y.sum().item() > 0 and (y[tr_inds].sum().item() == 0 or y[val_inds].sum().item() == 0 or y[te_inds].sum().item() == 0):
+        logging.warning(
+            "Day-based split left a split with zero positive examples "
+            "(fraud is concentrated in too narrow a time window for a chronological "
+            "split). Falling back to a random stratified 60/20/20 split instead."
+        )
+        from sklearn.model_selection import train_test_split
+        y_np = y.numpy()
+        all_inds = np.arange(n_samples)
+        tr_inds_np, rest_inds_np = train_test_split(
+            all_inds, test_size=0.4, random_state=42, stratify=y_np
+        )
+        val_inds_np, te_inds_np = train_test_split(
+            rest_inds_np, test_size=0.5, random_state=42, stratify=y_np[rest_inds_np]
+        )
+        tr_inds = torch.LongTensor(tr_inds_np)
+        val_inds = torch.LongTensor(val_inds_np)
+        te_inds = torch.LongTensor(te_inds_np)
+
     logging.info(f"Total train samples: {tr_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
             f"{y[tr_inds].float().mean() * 100 :.2f}% || Train days: {split[0][:5]}")
     logging.info(f"Total val samples: {val_inds.shape[0] / y.shape[0] * 100 :.2f}% || IR: "
@@ -141,6 +179,17 @@ def get_data(args, data_config):
         logging.info(f"Done: adding time-deltas")
     
     #Normalize data
+    # Stash the *train* split's raw (pre-normalization) per-column mean/std on
+    # tr_data before overwriting edge_attr with its normalized version. This
+    # is the one place those statistics are ever computed; callers that need
+    # to normalize new data the same way the model was trained on (e.g. an
+    # inference server, which cannot re-derive them from a single request)
+    # have to persist these, not just the checkpoint -- a checkpoint alone is
+    # silently unusable to reproduce training-time behavior on raw inputs.
+    if tr_data.edge_attr is not None:
+        tr_data.edge_attr_mean = tr_data.edge_attr.mean(0).detach().clone()
+        tr_data.edge_attr_std = tr_data.edge_attr.std(0).detach().clone()
+
     tr_data.x = val_data.x = te_data.x = z_norm(tr_data.x) if tr_data.x is not None else None
     if not args.model == 'rgcn':
         tr_data.edge_attr = z_norm(tr_data.edge_attr) if tr_data.edge_attr is not None else None
