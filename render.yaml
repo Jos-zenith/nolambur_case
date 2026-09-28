@@ -1,23 +1,29 @@
 services:
-  # Free web services share the workspace's monthly free instance-hour pool.
+  # Next.js console. It reaches the bridge over the bridge's public URL (two services
+  # never share 127.0.0.1 on Render).
   - type: web
     name: vict
     runtime: node
     plan: free
     buildCommand: npm install -g pnpm && pnpm install --frozen-lockfile && pnpm run build
     startCommand: pnpm start
-    healthCheckPath: /
+    # /health answers 200 whenever Next.js is up; it reports the bridge but never fails on it.
+    healthCheckPath: /health
     envVars:
       - key: GNN_FASTAPI_URL
         value: https://vict-bridge.onrender.com
 
+  # GNN bridge (FastAPI). Must stay a web service: the console calls it over HTTP, and
+  # background workers get no inbound traffic (and are not on the free plan).
   - type: web
     name: vict-bridge
     runtime: python
     rootDir: Multi-GNN
     plan: free
     buildCommand: pip install --no-cache-dir -r requirements-render.txt
+    # uvicorn binds to $PORT; infra/settings.py derives the outbox's own URL from it too.
     startCommand: python bridge_api.py
+    # 200 as soon as HTTP is up, with "rail": "warming" | "ready" in the body.
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
@@ -27,4 +33,17 @@ services:
       - key: GNN_KEEP_ALIVE_URL
         value: https://vict-bridge.onrender.com/health
 
-# Add a separate UptimeRobot monitor for https://vict-bridge.onrender.com/health.
+# Uptime monitors (UptimeRobot, every 5 min):
+#   https://vict.onrender.com/health                    frontend up?
+#   https://vict-bridge.onrender.com/health             bridge up? also keeps it from sleeping
+#   https://vict.onrender.com/health?strict=1           optional: whole stack ready (waits up to 45 s)
+#
+# Free-plan limits to know about:
+#   * Free web services share 750 instance-hours per workspace per month. Two services kept
+#     awake 24/7 need ~1,490, so both get suspended once the pool runs out, until the month
+#     resets. Keep only one service always-on (host the console elsewhere, e.g. Vercel),
+#     or put the bridge on a paid instance.
+#   * 512 MB RAM. The bridge measured ~435 MB resident after warm-up on Windows; watch the
+#     Render logs for out-of-memory restarts.
+#   * The filesystem is ephemeral: the SQLite audit store (Multi-GNN/data/rail.db) resets on
+#     every restart or spin-down. Set RAIL_DB_URL to a Postgres database to keep it.

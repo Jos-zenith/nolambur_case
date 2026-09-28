@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import asyncio
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
@@ -488,11 +489,19 @@ def root() -> dict[str, Any]:
     }
 
 
+_STARTED_AT = time.time()
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
+    """Liveness: 200 as soon as the process serves HTTP, even while the rail engine warms up
+    (Render's health check and uptime monitors need that). `rail` says whether it is ready."""
     checkpoint_path = _resolve_checkpoint_path()
+    rail = globals().get("RAIL")
     return {
         "status": "ok",
+        "rail": getattr(rail, "status", "starting"),
+        "uptime_seconds": round(time.time() - _STARTED_AT),
         "checkpoint_path": str(checkpoint_path),
         "checkpoint_exists": checkpoint_path.exists(),
         "available_models": sorted(MODEL_SETTINGS.keys()),

@@ -37,7 +37,9 @@ from pathlib import Path
 MULTI_GNN_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = MULTI_GNN_DIR / "data"
 
-BRIDGE_PUBLIC_URL = os.getenv("BRIDGE_PUBLIC_URL", f"http://127.0.0.1:{os.getenv('GNN_PORT', '8001')}").rstrip("/")
+# Same port resolution as bridge_api.py's uvicorn.run: GNN_PORT, else the host's PORT (Render sets it), else 8001.
+_PORT = os.getenv("GNN_PORT") or os.getenv("PORT") or "8001"
+BRIDGE_PUBLIC_URL = os.getenv("BRIDGE_PUBLIC_URL", f"http://127.0.0.1:{_PORT}").rstrip("/")
 
 RAIL_SOURCE = os.getenv("RAIL_SOURCE", "replay").lower()
 RAIL_WEBHOOK_SECRET = os.getenv("RAIL_WEBHOOK_SECRET", "")
