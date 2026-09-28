@@ -639,6 +639,21 @@ RAIL = rail_engine.mount(app, _rail_load, _rail_predict_chain)
 
 if __name__ == "__main__":
     import uvicorn
+    from threading import Thread
+    from time import sleep
+    from urllib.request import urlopen
+
+    def keep_alive() -> None:
+        health_url = os.getenv("GNN_KEEP_ALIVE_URL", "https://vict.onrender.com/health")
+        while True:
+            sleep(600)
+            try:
+                with urlopen(health_url, timeout=5):
+                    pass
+            except Exception:
+                pass
+
+    Thread(target=keep_alive, daemon=True).start()
 
     uvicorn.run(
         "bridge_api:app",
