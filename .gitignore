@@ -18,6 +18,7 @@ venv/
 
 # Multi-GNN ignores
 Multi-GNN/models/
+Multi-GNN/data/
 Multi-GNN/logs/
 Multi-GNN/wandb/
 Multi-GNN/.git

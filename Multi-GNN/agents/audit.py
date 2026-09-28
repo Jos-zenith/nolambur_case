@@ -1,4 +1,4 @@
-"""Append-only action log shared by the simulated / side-effecting tools."""
+"""Append-only action log shared by the side-effecting tools, mirrored into infra.store."""
 
 from __future__ import annotations
 

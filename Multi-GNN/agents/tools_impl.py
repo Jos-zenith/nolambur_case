@@ -2,8 +2,11 @@
 
 REAL   : score_transaction, score_transfer_chain, get_account_profile,
          list_downstream_transfers, watch_downstream_stream
-SIMULATED (labelled, no external system touched, appended to action_log.jsonl):
-         check_suspect_registry, freeze_account, file_1930_report
+SANDBOXED (real HTTP through infra/integrations.py's outbox; targets default to the
+         bridge's own mock gateway and mock 1930 portal, set GATEWAY_WEBHOOK_URL /
+         CFCFRMS_URL to point them elsewhere):
+         freeze_account, file_1930_report, and check_suspect_registry (NPCI_REGISTRY_URL;
+         the mock's answer comes from the synthetic mule label, so it is an oracle)
 """
 
 from __future__ import annotations
@@ -114,25 +117,32 @@ def watch_downstream_stream(seconds: int = 6, filter_state: str = "") -> dict[st
 # ---------------------------------------------------------------------- simulated
 
 def check_suspect_registry(vpa: str) -> dict[str, Any]:
-    account = resolve_account(vpa)
-    listed = account.is_mule  # simulated: derived from the synthetic label
+    """GET the suspect registry over HTTP (the bridge's mock NPCI registry unless NPCI_REGISTRY_URL is set)."""
+    import requests
+
+    from infra import settings
+
+    url = f"{settings.NPCI_REGISTRY_URL}/suspects/{resolve_account(vpa).vpa}"
+    sandbox = settings.is_sandbox(url)
+    try:
+        response = requests.get(url, headers={"X-Requester": "operation-nolambur-risk-console"}, timeout=10)
+        response.raise_for_status()
+        body = response.json()
+    except requests.RequestException as error:
+        return {"simulated": sandbox, "source": url, "error": f"registry unreachable: {error}"}
     return {
-        "simulated": True,
-        "source": "MOCK NPCI suspect registry - no real registry access in this environment",
-        "vpa": account.vpa,
-        "listed": listed,
-        "record": {
-            "category": "mule_account" if listed else None,
-            "reports": 3 if listed else 0,
-            "first_reported": "2024-03-15" if listed else None,
-        },
-        "note": "Wire to the real NPCI Suspect Registry API for production use.",
+        **body,
+        "simulated": sandbox,
+        "source": "MOCK NPCI suspect registry (sandbox REST endpoint), derived from the synthetic label" if sandbox else url,
     }
 
 
 def freeze_account(vpa: str, reason: str) -> dict[str, Any]:
+    from infra.integrations import queue_freeze_instruction
+
     account = resolve_account(vpa)
-    reference = f"FRZ-{int(time.time()) % 100000:05d}"
+    reference = f"FRZ-{int(time.time() * 1000) % 10**8:08d}"
+    gateway = queue_freeze_instruction(reference, account.vpa, account.account_id or None, account.state or None, reason)
     record = {
         "action": "freeze_account",
         "vpa": account.vpa,
@@ -140,29 +150,39 @@ def freeze_account(vpa: str, reason: str) -> dict[str, Any]:
         "state": account.state or None,
         "reason": reason,
         "freeze_reference": reference,
-        "simulated": True,
+        "gateway": gateway,
+        "simulated": gateway["sandbox"],
     }
     record_action(record)
+    where = "the sandbox gateway (no real bank)" if gateway["sandbox"] else gateway["target"]
     return {
         **record,
-        "note": "SIMULATED - no bank/RBI freeze API connected. Recorded to agents/action_log.jsonl.",
+        "note": f"Signed freeze instruction queued to {where}, outbox #{gateway['outboxId']}. Also in agents/action_log.jsonl.",
     }
 
 
 def file_1930_report(vpas: list[str], case_summary: str, total_amount_inr: float) -> dict[str, Any]:
-    acknowledgement = f"CFCFRMS-{int(time.time()) % 1000000:06d}"
+    from infra.integrations import submit_1930_complaint
+
+    resolved = [resolve_account(vpa).vpa for vpa in vpas]
+    reference = f"RPT-{int(time.time() * 1000) % 10**8:08d}"
+    portal = submit_1930_complaint(reference, resolved, case_summary, total_amount_inr)
     record = {
         "action": "file_1930_report",
-        "vpas": [resolve_account(vpa).vpa for vpa in vpas],
+        "vpas": resolved,
         "total_amount_inr": float(total_amount_inr),
         "case_summary": case_summary,
-        "acknowledgement_no": acknowledgement,
-        "simulated": True,
+        "internal_reference": reference,
+        "acknowledgement_no": portal["acknowledgementNo"],
+        "portal": portal,
+        "simulated": portal["sandbox"],
     }
     record_action(record)
+    where = "the sandbox 1930 portal (not the real CFCFRMS)" if portal["sandbox"] else portal["target"]
+    status = "acknowledged" if portal["acknowledgementNo"] else f"queued for retry ({portal['error']})"
     return {
         **record,
-        "note": "SIMULATED - no CFCFRMS/1930 API connected. Recorded to agents/action_log.jsonl.",
+        "note": f"Complaint sent to {where}: {status}. Outbox #{portal['outboxId']}.",
     }
 
 

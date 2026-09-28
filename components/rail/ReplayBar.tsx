@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 import { clock } from '@/lib/rail/format'
-import { railPost, useRail } from '@/lib/rail/store'
+import { railPost, useRail, useRoles } from '@/lib/rail/store'
 import { cn } from '@/lib/utils'
 
 const SPEEDS = [1, 4, 20, 120, 600]
@@ -14,6 +14,7 @@ export function ReplayBar() {
   const paused = useRail(s => s.paused)
   const setPaused = useRail(s => s.setPaused)
   const [busy, setBusy] = useState(false)
+  const { can } = useRoles()
   if (!m || !dataset) return null
 
   const control = async (body: object) => {
@@ -22,6 +23,8 @@ export function ReplayBar() {
     if (typeof data.paused === 'boolean') setPaused(data.paused)
     setBusy(false)
   }
+
+  if (m.rowsTotal === null) return <StreamBar paused={paused} busy={busy} control={control} canRestart={can('restart')} />
 
   const progress = m.rowsReplayed / m.rowsTotal
   const start = Date.parse(`${dataset.start}Z`) / 1000
@@ -37,6 +40,7 @@ export function ReplayBar() {
         <span className="font-mono">{dataset.file}</span>
         <span className="text-muted-foreground"> · {dataset.start.slice(0, 10)} </span>
         <span className="font-mono">{clock(m.simT)}</span>
+        {m.ingested > 0 && <span className="text-muted-foreground"> · +{m.ingested.toLocaleString('en-IN')} ingested via webhook</span>}
       </div>
       <div className="grid gap-1">
         <div className="relative h-2 rounded-full bg-muted" title="Dataset timeline. The red band is the hour the fraud happens in.">
@@ -64,8 +68,48 @@ export function ReplayBar() {
         <button disabled={busy} onClick={() => control({ paused: !paused })} className="h-7 rounded-sm border px-2.5 text-[12px] hover:bg-accent">
           {paused ? 'Resume' : 'Pause'}
         </button>
-        <button disabled={busy} onClick={() => control({ restart: true })} className="h-7 rounded-sm border px-2.5 text-[12px] hover:bg-accent" title="Reset alerts, freezes and cases, and replay from the first row">
+        <button
+          disabled={busy || !can('restart')}
+          onClick={() => control({ restart: true })}
+          className="h-7 rounded-sm border px-2.5 text-[12px] hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+          title={can('restart') ? 'Reset alerts, freezes and cases, and replay from the first row' : 'Restart needs the admin role'}
+        >
           Restart
+        </button>
+      </div>
+    </section>
+  )
+}
+
+/** Stream mode (RAIL_SOURCE=webhook|kafka|kinesis): no replay, the clock is event time. */
+function StreamBar({ paused, busy, control, canRestart }: { paused: boolean; busy: boolean; control: (body: object) => Promise<void>; canRestart: boolean }) {
+  const m = useRail(s => s.metrics)!
+  const counts = useRail(s => s.tickCounts)
+  const perSec = counts.length ? counts.slice(-10).reduce((a, b) => a + b, 0) / (Math.min(10, counts.length) * 0.5) : 0
+  return (
+    <section className="flex flex-wrap items-center gap-x-4 gap-y-2 border bg-card px-3 py-2.5 text-[12.5px]">
+      <span className="flex items-center gap-1.5">
+        <span className={cn('size-1.5 rounded-full', paused ? 'bg-sev-medium' : 'bg-ok')} />
+        Live stream from <span className="font-mono">{m.source}</span>
+      </span>
+      <span className="text-muted-foreground">
+        Event time <span className="font-mono text-foreground">{clock(m.simT)}</span>
+      </span>
+      <span className="text-muted-foreground">
+        <span className="font-mono text-foreground">{m.ingested.toLocaleString('en-IN')}</span> payments this run · {perSec.toFixed(0)}/s ·{' '}
+        {m.duplicatesDropped} duplicates dropped
+      </span>
+      <div className="ml-auto flex gap-1">
+        <button disabled={busy} onClick={() => control({ paused: !paused })} className="h-7 rounded-sm border px-2.5 text-[12px] hover:bg-accent" title="Paused payments wait in the inbox; nothing is dropped">
+          {paused ? 'Resume' : 'Pause'}
+        </button>
+        <button
+          disabled={busy || !canRestart}
+          onClick={() => control({ restart: true })}
+          className="h-7 rounded-sm border px-2.5 text-[12px] hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+          title={canRestart ? 'Clear alerts, freezes and cases. The audit trail in the store is kept.' : 'Reset needs the admin role'}
+        >
+          Reset state
         </button>
       </div>
     </section>

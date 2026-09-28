@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 
 import { Score, SeverityBadge, Table, TruthTag } from '@/components/rail/bits'
 import { duration, inr, stamp } from '@/lib/rail/format'
-import { railPost } from '@/lib/rail/store'
+import { railPost, useRoles } from '@/lib/rail/store'
 import type { Alert, Profile, Row } from '@/lib/rail/types'
 
 type Pack = {
@@ -39,13 +39,16 @@ export default function EvidencePackPage({ params }: { params: Promise<{ id: str
     load()
   }, [load])
 
+  const { can } = useRoles()
+  const supervisorOnly = 'Needs a supervisor. Switch user in the header.'
+
   const tool = async (kind: 'report' | 'notify') => {
     setBusy(kind)
     const { ok, data } = await railPost<{ tool: Record<string, unknown> }>(`cases/${id}/${kind}`)
     setBusy(null)
     if (!ok) return toast.error(data.error ?? 'Tool call failed')
     toast.success(kind === 'report' ? `1930 report filed: ${String(data.tool.acknowledgement_no ?? '')}` : `Officer notified (${String(data.tool.delivery ?? data.tool.status ?? 'sent')})`, {
-      description: `${String(data.tool.tool)} · ${String(data.tool.note ?? 'logged to agents/action_log.jsonl')}`,
+      description: `${String(data.tool.tool)} · ${String(data.tool.note ?? 'sent through the outbox')}`,
     })
     load()
   }
@@ -80,10 +83,10 @@ export default function EvidencePackPage({ params }: { params: Promise<{ id: str
           </p>
         </div>
         <div className="no-print flex flex-wrap gap-2">
-          <button onClick={() => tool('notify')} disabled={busy !== null} className="h-8 rounded-sm border px-3 text-[13px] hover:bg-accent disabled:opacity-50">
+          <button onClick={() => tool('notify')} disabled={busy !== null || !can('notify')} title={can('notify') ? undefined : supervisorOnly} className="h-8 rounded-sm border px-3 text-[13px] hover:bg-accent disabled:opacity-50">
             {busy === 'notify' ? 'Sending…' : 'Notify officer (SMS)'}
           </button>
-          <button onClick={() => tool('report')} disabled={busy !== null || !!pack.report} className="h-8 rounded-sm border px-3 text-[13px] hover:bg-accent disabled:opacity-50">
+          <button onClick={() => tool('report')} disabled={busy !== null || !!pack.report || !can('file_1930_report')} title={can('file_1930_report') ? undefined : supervisorOnly} className="h-8 rounded-sm border px-3 text-[13px] hover:bg-accent disabled:opacity-50">
             {pack.report ? 'Report filed' : busy === 'report' ? 'Filing…' : 'File 1930 report'}
           </button>
           <button onClick={download} className="h-8 rounded-sm border px-3 text-[13px] hover:bg-accent">Download JSON</button>

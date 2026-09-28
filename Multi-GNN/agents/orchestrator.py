@@ -41,8 +41,9 @@ flagged. Work it through four internal roles, in order, choosing tools yourself:
 Ground rules:
 - The T-GNN checkpoint is finetune-only, val F1 ~0.07. A high score means "structurally
   mule-like", not a calibrated probability. Never act on it alone.
-- `check_suspect_registry`, `freeze_account`, `file_1930_report` are SIMULATED - they touch
-  no real system. Say so in your writeup. The scoring and *_transfers tools are real.
+- `check_suspect_registry`, `freeze_account` and `file_1930_report` send real HTTP
+  requests, but by default to the bridge's SANDBOX registry, gateway and 1930 portal - no
+  bank, NPCI or government system. The mock registry's answer comes from the dataset label. Each result says whether it was sandboxed; say so in your writeup. The scoring and *_transfers tools are real.
 - Be terse: one or two sentences per decision. Finish with a short section headed
   "CASE DECISION".
 """

@@ -15,6 +15,7 @@ export function SeverityBadge({ severity, className }: { severity: Severity; cla
 
 const STATUS: Record<AlertStatus, [string, string]> = {
   open: ['Open', 'text-foreground'],
+  held: ['Held', 'text-sev-critical'],
   escalated: ['Escalated', 'text-sev-high'],
   frozen: ['Frozen', 'text-sev-critical'],
   cleared: ['Cleared', 'text-muted-foreground'],
@@ -55,8 +56,11 @@ export function Score({ value }: { value: number }) {
 export function Section({ title, note, children, className }: { title: string; note?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
     <section className={className}>
-      <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
-        <h3 className="text-[13px] font-semibold">{title}</h3>
+      <div className="mb-2.5 flex flex-wrap items-baseline gap-x-2">
+        <h3 className="flex items-center gap-2 text-[13.5px] font-semibold">
+          <span className="h-3.5 w-[3px] rounded-full bg-brand-1" aria-hidden />
+          {title}
+        </h3>
         {note && <span className="text-[12px] text-muted-foreground">{note}</span>}
       </div>
       {children}

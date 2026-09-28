@@ -14,6 +14,21 @@ What each number is:
   * detectors   - see only replayed rows (amount, time, sender/receiver, state) and
                   their own alert history. They never read is_fraud, layer or role.
   * labels      - is_fraud / role are used only to report precision and recall.
+
+Live payments (infra/ingest.py) enter through RailEngine.ingest_live: from the webhook
+in any mode, or from Kafka / Kinesis when RAIL_SOURCE selects them. They are scored
+online (one /predict splice per batch) and carry no label; their accounts' roles are
+looked up by id, so a streamed copy of the CSV is still measurable.
+
+Platform adapters (infra/): the audit trail and every analyst decision go to the store
+(SQLite or Postgres), multi-hop queries go to the graph store (memory or Neo4j), and
+freezes / 1930 reports leave through the integration outbox.
+
+Auto-hold (RAIL_AUTO_HOLD, on by default): a critical alert whose evidence the model
+also scores >= 0.9 puts the account on hold at once, actor "system". A hold blocks
+transfers exactly like a freeze but stays inside the aggregator (no bank instruction).
+A supervisor then freezes it (confirm) or clears it (release). Offline evaluation runs
+once without the policy (the detector baseline) and once with it (what it blocks).
 """
 
 from __future__ import annotations
@@ -23,18 +38,27 @@ import json
 import re
 import statistics
 import time
+import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+
+from infra import feedback as infra_feedback
+from infra import integrations, rbac, sandbox, settings as infra_settings
+from infra.graph import MemoryGraph, make_graph, summarize
+from infra.ingest import Payment, PaymentBatch, Source, make_source
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+LIVE_ROW_BASE = 1_000_000  # row ids for ingested payments, clear of the CSV's 0..N
+MAX_BATCH = 2000  # payments scored and ingested per tick
+MAX_INBOX = 50_000
 RULE_VERSION = "r1.1"
 TICK_SECONDS = 0.5
 DEFAULT_SPEED = 4.0
@@ -72,8 +96,10 @@ class Row:
     amount: float
     gnn: float
     is_fraud: int
-    layer: str
+    layer: str  # "live" for ingested payments
     blocked: bool = False
+    source: str = "replay"  # replay | webhook | kafka | kinesis
+    txn_id: str = ""
 
     def public(self) -> dict[str, Any]:
         return {
@@ -89,7 +115,9 @@ class Row:
             "amount": self.amount,
             "gnn": round(self.gnn, 4),
             "blocked": self.blocked,
-            "label": {"isFraud": bool(self.is_fraud), "layer": self.layer},
+            "source": self.source,
+            # Ingested payments have no label; is_fraud is -1 for them.
+            "label": {"isFraud": bool(self.is_fraud), "layer": self.layer} if self.is_fraud >= 0 else None,
         }
 
 
@@ -196,36 +224,60 @@ class Dataset:
 
 
 class RailEngine:
-    def __init__(self, data: Dataset, speed: float = DEFAULT_SPEED, record_actions: bool = True):
+    def __init__(self, data: Dataset, speed: float = DEFAULT_SPEED, record_actions: bool = True, store=None, source: str = "replay", auto_hold: bool = False):
         self.data = data
+        self.auto_hold = auto_hold
         self.record_actions = record_actions
         self.speed = speed
+        self.store = store  # infra.store.Store, or None (offline evaluation)
+        self.source = source  # "replay", or the live backend when the CSV replay is off
+        self.live = source != "replay"
+        if record_actions:
+            self.graph, self.graph_error = make_graph(lambda: (self.inbound, self.outbound))
+        else:
+            self.graph, self.graph_error = MemoryGraph(lambda: (self.inbound, self.outbound)), None
         self.reset()
 
     # ------------------------------------------------------------------ lifecycle
 
     def reset(self) -> None:
+        self.run_id = f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
         self.cursor = 0
-        self.sim_t = self.data.start_t - LEAD_IN_SECONDS
+        self.sim_t = time.time() if self.live else self.data.start_t - LEAD_IN_SECONDS
         self.replayed: list[Row] = []
         self.inbound: dict[str, list[Row]] = defaultdict(list)
         self.outbound: dict[str, list[Row]] = defaultdict(list)
         self.payees: dict[str, set[str]] = defaultdict(set)
         self.alerts: dict[str, Alert] = {}
+        self.alerts_by_account: dict[str, list[Alert]] = defaultdict(list)
         self.alert_by_key: dict[str, str] = {}
         self.frozen: dict[str, dict[str, Any]] = {}
+        self.held: dict[str, dict[str, Any]] = {}  # auto-hold: blocks like a freeze, pending review
         self.cases: dict[str, Case] = {}
         self.audit: list[dict[str, Any]] = []
         self.blocked_fraud = 0.0
         self.blocked_genuine = 0.0
+        self.blocked_unlabelled = 0.0
         self.tick_counts: list[int] = []
         self.batch: list[Row] = []
         self.events: list[dict[str, Any]] = []
         self.started_real = time.time()
+        self.seen_txn: set[str] = set()
+        self.live_vpa_to_id: dict[str, str] = {}
+        self.live_count = 0
+        self.duplicates = 0
+        # A live graph keeps its history across restarts; a replay restarts from zero, so its graph does too.
+        if not self.live:
+            try:
+                self.graph.reset()
+            except Exception as error:
+                self.graph_error = f"reset failed: {error}"[:300]
+        if self.store:
+            self.store.start_run(self.run_id, self.source, RULE_VERSION, {"graph": self.graph.backend, "speed": self.speed})
 
     @property
     def done(self) -> bool:
-        return self.cursor >= len(self.data.rows)
+        return not self.live and self.cursor >= len(self.data.rows)
 
     def advance(self, seconds: float) -> None:
         """Move the replay clock forward and process every row that falls due."""
@@ -251,19 +303,75 @@ class RailEngine:
 
     # ------------------------------------------------------------------ ingest
 
+    def account_for(self, vpa: str) -> str | None:
+        return self.data.vpa_to_id.get(vpa) or self.live_vpa_to_id.get(vpa)
+
+    def ingest_live(self, payments: list[dict[str, Any]], scores: list[float | None], source: str) -> list[Row]:
+        """Detect on ingested payments. Times come from the payment in live mode; during a
+        replay they are stamped at the replay clock so they land in the running timeline."""
+        self.batch = []
+        rows: list[Row] = []
+        for p, score in zip(payments, scores):
+            if p["txn_id"] in self.seen_txn:
+                self.duplicates += 1
+                continue
+            self.seen_txn.add(p["txn_id"])
+            t = self.sim_t
+            if self.live and p.get("timestamp"):
+                t = pd.Timestamp(p["timestamp"]).timestamp()
+            elif self.live:
+                t = time.time()
+            from_id = p.get("payer_account_id") or self.account_for(p["payer_vpa"]) or p["payer_vpa"]
+            to_id = p.get("payee_account_id") or self.account_for(p["payee_vpa"]) or p["payee_vpa"]
+            self.live_vpa_to_id.setdefault(p["payer_vpa"], from_id)
+            self.live_vpa_to_id.setdefault(p["payee_vpa"], to_id)
+            rows.append(
+                Row(
+                    row=LIVE_ROW_BASE + self.live_count,
+                    t=t,
+                    ts=datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),  # same naive-as-UTC convention as Dataset
+                    from_id=from_id,
+                    from_vpa=p["payer_vpa"],
+                    from_state=p.get("payer_state") or "",
+                    to_id=to_id,
+                    to_vpa=p["payee_vpa"],
+                    to_state=p.get("payee_state") or "",
+                    amount=float(p["amount_inr"]),
+                    gnn=float(score) if score is not None else 0.0,
+                    is_fraud=-1,
+                    layer="live",
+                    source=source,
+                    txn_id=p["txn_id"],
+                )
+            )
+            self.live_count += 1
+        rows.sort(key=lambda r: r.t)
+        if rows and self.live and not self.replayed:
+            self.sim_t = rows[0].t  # the event-time clock starts at the first payment
+        for r in rows:
+            self.sim_t = max(self.sim_t, r.t)
+            self._ingest(r)
+            if self.live:  # in replay mode the cursor indexes the CSV rows, not ingested ones
+                self.cursor += 1
+        return rows
+
     def _ingest(self, template: Row) -> None:
         r = Row(**{**template.__dict__})
-        if r.from_id in self.frozen or r.to_id in self.frozen:
+        if self._stopped(r.from_id) or self._stopped(r.to_id):
             r.blocked = True
-            if r.is_fraud:
+            if r.is_fraud == 1:
                 self.blocked_fraud += r.amount
-            else:
+            elif r.is_fraud == 0:
                 self.blocked_genuine += r.amount
+            else:
+                self.blocked_unlabelled += r.amount
             self.replayed.append(r)
             self.batch.append(r)
+            self.graph.add(r)
             return
         self.replayed.append(r)
         self.batch.append(r)
+        self.graph.add(r)
         new_payee = r.to_id not in self.payees[r.from_id]
         self.payees[r.from_id].add(r.to_id)
         self.inbound[r.to_id].append(r)
@@ -279,10 +387,14 @@ class RailEngine:
         self._check_model_only(r)
 
     def _alerts_on(self, account_id: str) -> list[Alert]:
-        return [a for a in self.alerts.values() if a.account_id == account_id]
+        return list(self.alerts_by_account.get(account_id, ()))
+
+    def _stopped(self, account_id: str) -> bool:
+        """Frozen or held: its transfers are blocked."""
+        return account_id in self.frozen or account_id in self.held
 
     def _flagged(self, account_id: str) -> bool:
-        return account_id in self.frozen or any(a.status != "cleared" for a in self._alerts_on(account_id))
+        return self._stopped(account_id) or any(a.status != "cleared" for a in self._alerts_on(account_id))
 
     # ------------------------------------------------------------------ detectors
 
@@ -347,8 +459,8 @@ class RailEngine:
         )
 
     def _is_hop_source(self, account_id: str, t: float) -> bool:
-        """Frozen, or flagged by a primary rule in the last 24h. Hop alerts don't propagate further."""
-        if account_id in self.frozen:
+        """Frozen or held, or flagged by a primary rule in the last 24h. Hop alerts don't propagate further."""
+        if self._stopped(account_id):
             return True
         return any(
             a.detector in ("high_value_new_payee", "pass_through") and a.status != "cleared" and a.created_t >= t - 86400
@@ -357,7 +469,7 @@ class RailEngine:
 
     def _check_hop_from_flagged(self, r: Row) -> None:
         """Receives money from an account that a primary rule flagged in the last 24 hours."""
-        if r.to_id in self.frozen or not self._is_hop_source(r.from_id, r.t):
+        if self._stopped(r.to_id) or not self._is_hop_source(r.from_id, r.t):
             return
         hits = [x for x in self.inbound[r.to_id] if self._is_hop_source(x.from_id, x.t)]
         senders = {x.from_id for x in hits}
@@ -419,9 +531,10 @@ class RailEngine:
             existing.rows = sorted({*existing.rows, *(x.row for x in rows)}, key=lambda i: i)
             existing.first_evidence_t = min(existing.first_evidence_t, min(x.t for x in rows))
             existing.updated_t = self.sim_t
+            self._maybe_hold(existing)
             self.events.append({"type": "alert", "alert": existing.public()})
             return
-        if account_id in self.frozen:
+        if self._stopped(account_id):
             return
         # A model-only lead is superseded once a rule fires on the same account.
         if detector != "model_only":
@@ -448,8 +561,28 @@ class RailEngine:
             truth_role=self.data.role.get(account_id, "unknown"),
         )
         self.alerts[alert.id] = alert
+        self.alerts_by_account[account_id].append(alert)
         self.alert_by_key[key] = alert.id
+        self.graph.mark(account_id, flagged=True)
+        self._maybe_hold(alert)
         self.events.append({"type": "alert", "alert": alert.public()})
+
+    def _maybe_hold(self, alert: Alert) -> None:
+        """The automatic intervention: hold the account on a critical, model-corroborated alert."""
+        if not self.auto_hold or alert.severity != "critical" or alert.gnn_max < rbac.OVERRIDE_SCORE:
+            return
+        if alert.status not in ("open", "escalated") or self._stopped(alert.account_id):
+            return
+        alert.status = "held"
+        alert.case_id = self._attach_to_case(alert).id
+        self.held[alert.account_id] = {"at": self.sim_t, "by": "system", "alertId": alert.id, "policy": f"critical + model >= {rbac.OVERRIDE_SCORE}"}
+        self.graph.mark(alert.account_id, frozen=True)
+        self._log(
+            "auto_hold", "system",
+            f"Held {alert.vpa}: {DETECTORS[alert.detector].lower()} (critical) and model score {alert.gnn_max:.3f}. Transfers blocked pending review.",
+            role="system", alert_id=alert.id, account_id=alert.account_id, case_id=alert.case_id,
+        )
+        self.events.append({"type": "held", "accountId": alert.account_id, "vpa": alert.vpa, "alertId": alert.id})
 
     def _vpa(self, account_id: str) -> str:
         rows = self.inbound.get(account_id) or self.outbound.get(account_id)
@@ -460,24 +593,39 @@ class RailEngine:
 
     # ------------------------------------------------------------------ actions
 
-    def act(self, alert_id: str, action: str, note: str, actor: str) -> dict[str, Any]:
+    def is_override(self, alert: Alert, action: str) -> bool:
+        """Clearing something the model scored >= 0.9, or releasing an automatic hold."""
+        return action == "clear" and (alert.status == "held" or alert.gnn_max >= rbac.OVERRIDE_SCORE)
+
+    def act(self, alert_id: str, action: str, note: str, actor: str, role: str = "analyst") -> dict[str, Any]:
         alert = self.alerts.get(alert_id)
         if not alert:
             return {"error": "Alert not found", "status": 404}
         if not note.strip():
             return {"error": "A note is required for every action", "status": 422}
+        if alert.status in ("frozen", "cleared", "superseded"):
+            return {"error": f"Alert is already {alert.status}", "status": 409}
+        override = self.is_override(alert, action)
+        was_held = alert.status == "held"
         tool_result = None
         if action == "clear":
             alert.status = "cleared"
+            if was_held and not any(a.status == "held" for a in self._alerts_on(alert.account_id)):
+                self.held.pop(alert.account_id, None)
+                self.events.append({"type": "released", "accountId": alert.account_id, "vpa": alert.vpa})
+            if not any(a.status not in ("cleared", "superseded") for a in self._alerts_on(alert.account_id)):
+                self.graph.mark(alert.account_id, flagged=False, frozen=False)
         elif action == "escalate":
-            alert.status = "escalated"
+            if not was_held:  # a held alert keeps its hold; escalating just files it to a case
+                alert.status = "escalated"
             alert.case_id = self._attach_to_case(alert).id
         elif action == "freeze":
             alert.status = "frozen"
             alert.case_id = self._attach_to_case(alert).id
+            self.held.pop(alert.account_id, None)
             tool_result = self._freeze(alert.account_id, alert.vpa, f"{alert.id}: {note.strip()}", actor)
             for other in self._alerts_on(alert.account_id):
-                if other.id != alert.id and other.status in ("open", "escalated"):
+                if other.id != alert.id and other.status in ("open", "escalated", "held"):
                     other.status = "frozen"
                     other.case_id = alert.case_id
                     self._attach_to_case(other)
@@ -485,9 +633,12 @@ class RailEngine:
         else:
             return {"error": f"Unknown action {action}", "status": 400}
         alert.updated_t = self.sim_t
-        self._log(action, actor, note.strip(), alert_id=alert.id, account_id=alert.account_id, tool=tool_result)
+        if self.store:
+            self.store.record_decision(self.run_id, alert.public(), action, actor, note.strip(), self.sim_t)
+        logged = "release_hold" if action == "clear" and was_held else action
+        self._log(logged, actor, note.strip(), role=role, override=override or None, alert_id=alert.id, account_id=alert.account_id, tool=tool_result)
         self.events.append({"type": "alert", "alert": alert.public()})
-        return {"alert": alert.public(), "tool": tool_result}
+        return {"alert": alert.public(), "tool": tool_result, "override": override}
 
     def _freeze(self, account_id: str, vpa: str, reason: str, actor: str) -> dict[str, Any]:
         result: dict[str, Any] = {"tool": "agents.tools_impl.freeze_account", "simulated": True}
@@ -498,11 +649,12 @@ class RailEngine:
                 result = {"tool": "agents.tools_impl.freeze_account", **freeze_account(vpa, reason)}
             except Exception as error:  # the console must keep working if the agent package breaks
                 result["error"] = str(error)
-        self.frozen[account_id] = {"at": self.sim_t, "by": actor, "reference": result.get("freeze_reference")}
+        self.frozen[account_id] = {"at": self.sim_t, "by": actor, "reference": result.get("freeze_reference"), "gateway": result.get("gateway")}
+        self.graph.mark(account_id, frozen=True)
         self.events.append({"type": "frozen", "accountId": account_id, "vpa": vpa, "reference": result.get("freeze_reference")})
         return result
 
-    def file_report(self, case_id: str, actor: str) -> dict[str, Any]:
+    def file_report(self, case_id: str, actor: str, role: str = "supervisor") -> dict[str, Any]:
         case = self.cases.get(case_id)
         if not case:
             return {"error": "Case not found", "status": 404}
@@ -520,10 +672,10 @@ class RailEngine:
         except Exception as error:
             result["error"] = str(error)
         case.report = result
-        self._log("file_1930_report", actor, summary, case_id=case.id, tool=result)
+        self._log("file_1930_report", actor, summary, role=role, case_id=case.id, tool=result)
         return {"case": case.public(), "tool": result}
 
-    def notify(self, case_id: str, actor: str) -> dict[str, Any]:
+    def notify(self, case_id: str, actor: str, role: str = "supervisor") -> dict[str, Any]:
         case = self.cases.get(case_id)
         if not case:
             return {"error": "Case not found", "status": 404}
@@ -535,7 +687,7 @@ class RailEngine:
             result = {"tool": "agents.tools_impl.notify_officer", **notify_officer(message, "high")}
         except Exception as error:
             result["error"] = str(error)
-        self._log("notify_officer", actor, message, case_id=case.id, tool=result)
+        self._log("notify_officer", actor, message, role=role, case_id=case.id, tool=result)
         return {"tool": result}
 
     def _attach_to_case(self, alert: Alert) -> Case:
@@ -546,7 +698,7 @@ class RailEngine:
         if not case:
             case = Case(id=f"CASE-{len(self.cases) + 1:03d}", opened_t=self.sim_t)
             self.cases[case.id] = case
-            self._log("case_opened", "system", f"Opened from {alert.id}", case_id=case.id, account_id=alert.account_id)
+            self._log("case_opened", "system", f"Opened from {alert.id}", role="system", case_id=case.id, account_id=alert.account_id)
         if alert.account_id not in case.account_ids:
             case.account_ids.append(alert.account_id)
         if alert.id not in case.alert_ids:
@@ -558,6 +710,8 @@ class RailEngine:
         camel = {"alert_id": "alertId", "account_id": "accountId", "case_id": "caseId"}
         entry.update({camel.get(k, k): v for k, v in extra.items() if v is not None})
         self.audit.append(entry)
+        if self.store:
+            self.store.record_audit(self.run_id, entry)
         self.events.append({"type": "audit", "entry": entry})
 
     # ------------------------------------------------------------------ reads
@@ -568,7 +722,8 @@ class RailEngine:
         by_sev = {k: sum(1 for a in open_ if a.severity == k) for k in SEV_RANK}
         tta = [a.created_t - a.first_evidence_t for a in alerts]
         leads = [a.lead_seconds for a in alerts if a.lead_seconds is not None]
-        rule_alerts = [a for a in alerts if a.detector != "model_only"]
+        # Accounts outside the labelled dataset (new live payers) have no truth; leave them out.
+        rule_alerts = [a for a in alerts if a.detector != "model_only" and a.truth_role != "unknown"]
         mules_seen = {
             acct
             for r in self.replayed
@@ -580,8 +735,12 @@ class RailEngine:
         last_minute = sum(1 for r in self.replayed[-400:] if r.t > self.sim_t - 60)
         return {
             "simT": self.sim_t,
+            "source": self.source,
+            "runId": self.run_id,
             "rowsReplayed": self.cursor,
-            "rowsTotal": len(self.data.rows),
+            "rowsTotal": None if self.live else len(self.data.rows),
+            "ingested": self.live_count,
+            "duplicatesDropped": self.duplicates,
             "speed": self.speed,
             "done": self.done,
             "txnsLastMinute": last_minute,
@@ -595,8 +754,11 @@ class RailEngine:
             "mulesSeen": len(mules_seen),
             "mulesAlerted": len(mules_alerted),
             "frozenAccounts": len(self.frozen),
+            "heldAccounts": len(self.held),
+            "autoHold": self.auto_hold,
             "blockedFraudAmount": self.blocked_fraud,
             "blockedGenuineAmount": self.blocked_genuine,
+            "blockedUnlabelledAmount": self.blocked_unlabelled,
         }
 
     def snapshot(self) -> dict[str, Any]:
@@ -607,6 +769,7 @@ class RailEngine:
             "audit": self.audit[-80:][::-1],
             "cases": [c.public() for c in self.cases.values()],
             "frozen": [{"accountId": k, **v} for k, v in self.frozen.items()],
+            "held": [{"accountId": k, **v} for k, v in self.held.items()],
             "tickCounts": self.tick_counts[-60:],
             "dataset": dataset_facts(self.data),
         }
@@ -630,6 +793,39 @@ class RailEngine:
             "evidence": [index[i].public() for i in alert.rows[-20:][::-1] if i in index],
             "otherAlerts": [a.public() for a in self._alerts_on(acct) if a.id != alert.id],
             "audit": [e for e in self.audit if e.get("alertId") == alert.id or e.get("accountId") == acct][::-1],
+            "history": self.account_history(acct),
+        }
+
+    def account_history(self, acct: str) -> list[dict[str, Any]]:
+        """Analyst decisions on this account in earlier runs, from the durable store."""
+        if not self.store:
+            return []
+        try:
+            return [
+                {"runId": d["run_id"], "alertId": d["alert_id"], "detector": d["detector"], "decision": d["decision"], "actor": d["actor"], "note": d["note"], "at": d["at"]}
+                for d in self.store.account_history(acct, exclude_run=self.run_id)
+            ]
+        except Exception:
+            return []
+
+    def downstream(self, acct: str, hops: int = 3, limit: int = 200) -> dict[str, Any]:
+        """Time-respecting paths the money took out of this account, from the graph store."""
+        paths = self.graph.downstream_paths(acct, hops, limit)
+        for p in paths:
+            for n in p["nodes"]:
+                n["flagged"] = self._flagged(n["id"])
+                n["frozen"] = self._stopped(n["id"])
+                n["truthRole"] = self.data.role.get(n["id"], "unknown")
+        leaves = [p for p in paths if len(p["legs"]) == max((len(q["legs"]) for q in paths), default=0)]
+        return {
+            "accountId": acct,
+            "hops": hops,
+            "graph": self.graph.backend,
+            "truncated": len(paths) >= limit,
+            "paths": paths,
+            "longest": leaves[:20],
+            **summarize(paths, acct),
+            "flaggedReached": len({n["id"] for p in paths for n in p["nodes"][1:] if n["flagged"]}),
         }
 
     def profile(self, acct: str) -> dict[str, Any]:
@@ -651,6 +847,7 @@ class RailEngine:
             "firstInT": first_in,
             "firstOutT": first_out,
             "frozen": self.frozen.get(acct),
+            "held": self.held.get(acct),
             "truthRole": self.data.role.get(acct, "unknown"),
             "note": "Computed from replayed rows only. truthRole is the dataset label; detectors never read it.",
         }
@@ -672,7 +869,7 @@ class RailEngine:
                 ]
             for g in ordered:
                 g["flagged"] = g["id"] != "others" and self._flagged(g["id"])
-                g["frozen"] = g["id"] in self.frozen
+                g["frozen"] = self._stopped(g["id"])
             return ordered
 
         ins = self.inbound.get(acct, [])
@@ -735,7 +932,7 @@ class RailEngine:
                 "exited": exited,
                 "blocked": sum(r.amount for r in rows if r.blocked),
             },
-            "accounts": [{**self.profile(a), "frozen": a in self.frozen, "freeze": self.frozen.get(a)} for a in case.account_ids],
+            "accounts": [{**self.profile(a), "frozen": a in self.frozen, "freeze": self.frozen.get(a), "held": self.held.get(a)} for a in case.account_ids],
             "alerts": [a.public() for a in alerts],
             "links": links,
             "timeline": timeline,
@@ -747,17 +944,16 @@ class RailEngine:
         """For a merchant applicant's settlement VPAs: who have they transacted with, and are any flagged?"""
         results = []
         for vpa in vpas:
-            acct = self.data.vpa_to_id.get(vpa.strip())
+            acct = self.account_for(vpa.strip())
             if not acct:
                 results.append({"vpa": vpa, "known": False, "direct": [], "secondHop": [], "gnnMax": 0.0, "txns": 0})
                 continue
             rows = self.inbound.get(acct, []) + self.outbound.get(acct, [])
-            direct_ids = {x.from_id if x.to_id == acct else x.to_id for x in rows}
+            direct_ids = self.graph.counterparties(acct)  # graph store: memory or Neo4j
             direct = [self._party(d, acct) for d in direct_ids if self._flagged(d)]
             second: dict[str, dict[str, Any]] = {}
             for d in direct_ids:
-                for x in self.inbound.get(d, []) + self.outbound.get(d, []):
-                    other = x.from_id if x.to_id == d else x.to_id
+                for other in self.graph.counterparties(d):
                     if other != acct and other not in direct_ids and self._flagged(other):
                         second[other] = {**self._party(other, d), "via": self._vpa(d)}
             results.append(
@@ -786,13 +982,13 @@ class RailEngine:
             decision, why = "approve", f"Only second-hop links ({len(weak[0]['secondHop'])}) to flagged accounts. Approve and monitor."
         else:
             decision, why = "approve", "No direct or second-hop links to flagged accounts in the replayed history."
-        return {"decision": decision, "reason": why, "results": results, "checkedAgainstRows": self.cursor}
+        return {"decision": decision, "reason": why, "results": results, "checkedAgainstRows": len(self.replayed), "graph": self.graph.backend}
 
     def _party(self, acct: str, relative_to: str) -> dict[str, Any]:
         return {
             "accountId": acct,
             "vpa": self._vpa(acct),
-            "frozen": acct in self.frozen,
+            "frozen": self._stopped(acct),
             "alerts": [a.id for a in self._alerts_on(acct) if a.status != "cleared"],
         }
 
@@ -930,6 +1126,22 @@ def evaluate(data: Dataset) -> dict[str, Any]:
         "medianTimeToAlertSec": offline.metrics()["medianTimeToAlertSec"],
     }
 
+    policy = RailEngine(data, record_actions=False, auto_hold=True)
+    policy.run_to_end()
+    mule_roles = ("l1_mule", "l2_mule")
+    held_ids = {a.account_id for a in policy.alerts.values() if a.status == "held"}
+    hold_delay = [h["at"] - policy.alerts[h["alertId"]].first_evidence_t for h in policy.held.values()]
+    auto_hold = {
+        "policy": f"critical alert and model score >= {rbac.OVERRIDE_SCORE}",
+        "accountsHeld": len(held_ids),
+        "mulesHeld": sum(1 for a in held_ids if data.role.get(a) in mule_roles),
+        "fraudTotal": sum(r.amount for r in rows if r.is_fraud),
+        "fraudBlocked": policy.blocked_fraud,
+        "genuineBlocked": policy.blocked_genuine,
+        "medianSecondsToHold": statistics.median(hold_delay) if hold_delay else None,
+        "note": "Replay with nobody acting except the policy. Blocked = transfers to or from a held account after the hold.",
+    }
+
     checkpoint = SCRIPT_DIR / "models" / "local_finetuned_gin_nolambur.pt"
     settings = json.loads((SCRIPT_DIR / "model_settings.json").read_text(encoding="utf-8"))["gin"]["params"]
     return {
@@ -950,6 +1162,7 @@ def evaluate(data: Dataset) -> dict[str, Any]:
         "inSample": {"thresholds": thresholds, "perLayer": per_layer, "histogram": hist},
         "amountRule": amount_rule,
         "detectors": detectors,
+        "autoHold": auto_hold,
     }
 
 
@@ -959,41 +1172,157 @@ def evaluate(data: Dataset) -> dict[str, Any]:
 class RailService:
     """Owns the engine, drives the replay clock and fans events out to SSE clients."""
 
-    def __init__(self) -> None:
+    def __init__(self, predict_chain: Callable[[list[dict[str, Any]]], dict[str, Any]] | None = None) -> None:
         self.engine: RailEngine | None = None
         self.evaluation: dict[str, Any] | None = None
         self.status = "starting"
         self.error: str | None = None
         self.paused = False
         self.subscribers: set[asyncio.Queue] = set()
+        self.predict_chain = predict_chain
+        self.mode = infra_settings.RAIL_SOURCE if infra_settings.RAIL_SOURCE in ("webhook", "kafka", "kinesis") else "replay"
+        self.inbox: asyncio.Queue = asyncio.Queue()
+        self.source: Source = make_source()
+        self.store = None
+        self.store_error: str | None = None
+        self.ingest_stats = {"webhookAccepted": 0, "rejected": 0, "scored": 0, "scoreErrors": 0, "lastScoreError": None, "lastBatch": 0, "lastScoreMs": None}
+        self._flushing = False
 
     async def start(self, load: Callable[[], tuple[pd.DataFrame, Any]]) -> None:
         self.status = "warming"
+        try:
+            from infra.store import get_store
+
+            self.store = await asyncio.to_thread(get_store)
+            integrations.ensure_worker()  # also resumes deliveries left pending by a previous process
+        except Exception as error:  # the console runs without persistence rather than not at all
+            self.store_error = f"{type(error).__name__}: {error}"[:300]
         try:
             raw, scores = await asyncio.to_thread(load)
             labels = pd.read_csv(SCRIPT_DIR / "nolambur_labels.csv")
             data = await asyncio.to_thread(Dataset, raw, scores, labels)
             self.evaluation = await asyncio.to_thread(evaluate, data)
-            self.engine = RailEngine(data)
+            self.engine = await asyncio.to_thread(
+                lambda: RailEngine(data, DEFAULT_SPEED, True, self.store, self.mode, auto_hold=infra_settings.RAIL_AUTO_HOLD)
+            )
             self.status = "ready"
         except Exception as error:
             self.status = "error"
             self.error = f"{type(error).__name__}: {error}"
             return
+        loop = asyncio.get_running_loop()
+
+        def push(payments: list[dict[str, Any]]) -> None:  # called from consumer threads too
+            loop.call_soon_threadsafe(self.inbox.put_nowait, (self.source.backend, payments))
+
+        if self.mode in ("kafka", "kinesis"):
+            asyncio.create_task(self.source.start(push))
+        else:
+            await self.source.start(push)
         asyncio.create_task(self._loop())
+
+    def _drain_inbox(self) -> list[tuple[str, dict[str, Any]]]:
+        items: list[tuple[str, dict[str, Any]]] = []
+        while len(items) < MAX_BATCH and not self.inbox.empty():
+            source, payments = self.inbox.get_nowait()
+            room = MAX_BATCH - len(items)
+            items.extend((source, p) for p in payments[:room])
+            if len(payments) > room:  # put the rest back at the front of the next tick
+                self.inbox._queue.appendleft((source, payments[room:]))  # type: ignore[attr-defined]
+        return items
+
+    async def _score(self, payments: list[dict[str, Any]]) -> list[float | None]:
+        """One /predict splice for the whole batch: each payment is an edge on the background graph."""
+        if not self.predict_chain:
+            return [None] * len(payments)
+        legs = [
+            {"sender": p["payer_account_id"] or p["payer_vpa"], "receiver": p["payee_account_id"] or p["payee_vpa"], "amount_inr": p["amount_inr"],
+             "timestamp": pd.Timestamp(p["timestamp"]).strftime("%Y-%m-%dT%H:%M:%S") if p.get("timestamp") else ""}
+            for p in payments
+        ]
+        started = time.perf_counter()
+        try:
+            scored = await asyncio.to_thread(self.predict_chain, legs)
+            self.ingest_stats["scored"] += len(payments)
+            self.ingest_stats["lastScoreMs"] = round((time.perf_counter() - started) * 1000, 1)
+            return [float(leg["fraud_probability"]) for leg in scored["legs"]]
+        except Exception as error:
+            self.ingest_stats["scoreErrors"] += len(payments)
+            self.ingest_stats["lastScoreError"] = f"{type(error).__name__}: {error}"[:300]
+            return [None] * len(payments)
 
     async def _loop(self) -> None:
         while True:
             await asyncio.sleep(TICK_SECONDS)
-            engine = self.engine
-            if engine is None:
-                continue
-            if not self.paused and not engine.done:
+            try:
+                await self._tick()
+            except Exception as error:  # one bad batch must not stop the clock
+                self.ingest_stats["lastTickError"] = f"{type(error).__name__}: {error}"[:300]
+
+    async def _tick(self) -> None:
+        engine = self.engine
+        if engine is None:
+            return
+        if not self.paused:
+            ticked = False
+            if not engine.live and not engine.done:
                 engine.advance(TICK_SECONDS * engine.speed)
-                rows = [r.public() for r in engine.batch]
+                ticked = True
+            replay_rows = list(engine.batch) if ticked else []
+            items = self._drain_inbox()
+            live_rows: list[Row] = []
+            if items:
+                payments = [p for _, p in items]
+                scores = await self._score(payments)
+                by_source: dict[str, list[int]] = defaultdict(list)
+                for i, (source, _) in enumerate(items):
+                    by_source[source].append(i)
+                for source, idx in by_source.items():
+                    live_rows += engine.ingest_live([payments[i] for i in idx], [scores[i] for i in idx], source)
+                self.ingest_stats["lastBatch"] = len(items)
+            if ticked or engine.live or live_rows:
+                rows = [r.public() for r in replay_rows + live_rows]
+                if ticked:
+                    engine.tick_counts[-1] += len(live_rows)
+                else:
+                    engine.tick_counts = (engine.tick_counts + [len(live_rows)])[-120:]
                 self.publish({"type": "tick", "rows": rows, "metrics": engine.metrics()})
-            for event in engine.drain_events():
-                self.publish(event)
+        for event in engine.drain_events():
+            self.publish(event)
+        if engine.graph.backend != "memory" and not self._flushing:
+            asyncio.create_task(self._flush_graph(engine))
+
+    async def _flush_graph(self, engine: RailEngine) -> None:
+        self._flushing = True
+        try:
+            await asyncio.to_thread(engine.graph.flush)
+        finally:
+            self._flushing = False
+
+    async def graph_call(self, fn: Callable[..., Any], *args: Any) -> Any:
+        """Memory-graph queries read the engine directly; Neo4j ones leave the event loop."""
+        if self.engine and self.engine.graph.backend == "memory":
+            return fn(*args)
+        return await asyncio.to_thread(fn, *args)
+
+    def platform(self) -> dict[str, Any]:
+        eng = self.engine
+        return {
+            "ingest": {
+                "mode": self.mode,
+                "replay": {"enabled": self.mode == "replay", "file": "nolambur_transactions.csv"},
+                "source": self.source.describe(),
+                "webhook": {"endpoint": "POST /rail/ingest/payments", "signed": bool(infra_settings.RAIL_WEBHOOK_SECRET)},
+                "inboxDepth": sum(len(p) for _, p in list(self.inbox._queue)),  # type: ignore[attr-defined]
+                **self.ingest_stats,
+                "ingestedThisRun": eng.live_count if eng else 0,
+                "duplicatesDropped": eng.duplicates if eng else 0,
+            },
+            "graph": {**(eng.graph.describe() if eng else {}), "fallbackReason": eng.graph_error if eng else None},
+            "store": {**(self.store.describe() if self.store else {"backend": None}), "error": self.store_error, **(self.store.counts() if self.store else {})},
+            "integrations": integrations.describe() if self.store else {"error": self.store_error},
+            "runId": eng.run_id if eng else None,
+        }
 
     def publish(self, event: dict[str, Any]) -> None:
         payload = json.dumps(event, default=str)
@@ -1016,7 +1345,6 @@ class RailService:
 class ActionBody(BaseModel):
     action: str
     note: str = ""
-    actor: str = "risk.analyst"
 
 
 class ControlBody(BaseModel):
@@ -1030,9 +1358,11 @@ class OnboardingBody(BaseModel):
 
 
 def mount(app, load: Callable[[], tuple[pd.DataFrame, Any]], predict_chain: Callable[[list[dict[str, Any]]], dict[str, Any]]) -> RailService:
-    """Add the /rail routes to the bridge's FastAPI app."""
-    service = RailService()
+    """Add the /rail and /sandbox routes to the bridge's FastAPI app."""
+    service = RailService(predict_chain)
     router = APIRouter(prefix="/rail")
+
+    Who = Depends(rbac.principal)
 
     def engine() -> RailEngine:
         if service.engine is None:
@@ -1088,15 +1418,22 @@ def mount(app, load: Callable[[], tuple[pd.DataFrame, Any]], predict_chain: Call
         return detail
 
     @router.post("/alerts/{alert_id}/actions")
-    async def alert_action(alert_id: str, body: ActionBody):
-        result = engine().act(alert_id, body.action, body.note, body.actor)
+    async def alert_action(alert_id: str, body: ActionBody, who: rbac.Principal = Who):
+        eng = engine()
+        alert = eng.alerts.get(alert_id)
+        if body.action in ("clear", "escalate", "freeze"):
+            who.require(body.action)
+        if alert and eng.is_override(alert, body.action):
+            who.require("override", "releasing a hold or clearing a model score >= 0.9")
+        result = eng.act(alert_id, body.action, body.note, who.actor, who.role)
         if "error" in result:
             return JSONResponse(result, status_code=result.pop("status"))
         return result
 
     @router.post("/alerts/{alert_id}/investigate")
-    async def investigate(alert_id: str) -> dict[str, Any]:
+    async def investigate(alert_id: str, who: rbac.Principal = Who) -> dict[str, Any]:
         """Runs the agent tools an investigator would: score the chain live, check the registry."""
+        who.require("investigate")
         eng = engine()
         if alert_id not in eng.alerts:
             raise HTTPException(status_code=404, detail="Alert not found")
@@ -1114,8 +1451,9 @@ def mount(app, load: Callable[[], tuple[pd.DataFrame, Any]], predict_chain: Call
         return {"legs": legs, "scored": scored, "seconds": elapsed, "registry": registry}
 
     @router.post("/control")
-    async def control(body: ControlBody) -> dict[str, Any]:
+    async def control(body: ControlBody, who: rbac.Principal = Who) -> dict[str, Any]:
         engine()
+        who.require("restart" if body.restart else "control", "restarting the engine" if body.restart else None)
         return service.control(body.speed, body.restart, body.paused)
 
     @router.get("/cases/{case_id}/evidence-pack")
@@ -1126,25 +1464,97 @@ def mount(app, load: Callable[[], tuple[pd.DataFrame, Any]], predict_chain: Call
         return pack
 
     @router.post("/cases/{case_id}/report")
-    async def report(case_id: str):
-        result = await asyncio.to_thread(engine().file_report, case_id, "risk.analyst")
+    async def report(case_id: str, who: rbac.Principal = Who):
+        who.require("file_1930_report", "filing a 1930 report")
+        result = await asyncio.to_thread(engine().file_report, case_id, who.actor, who.role)
         if "error" in result:
             return JSONResponse(result, status_code=result.pop("status"))
         return result
 
     @router.post("/cases/{case_id}/notify")
-    async def notify(case_id: str):
-        result = await asyncio.to_thread(engine().notify, case_id, "risk.analyst")
+    async def notify(case_id: str, who: rbac.Principal = Who):
+        who.require("notify", "notifying officers")
+        result = await asyncio.to_thread(engine().notify, case_id, who.actor, who.role)
         if "error" in result:
             return JSONResponse(result, status_code=result.pop("status"))
         return result
 
     @router.post("/onboarding/check")
-    async def onboarding_check(body: OnboardingBody) -> dict[str, Any]:
+    async def onboarding_check(body: OnboardingBody, who: rbac.Principal = Who) -> dict[str, Any]:
+        who.require("onboarding")
         started = time.perf_counter()
-        result = engine().onboarding_check([v for v in body.vpas if v.strip()][:10])
+        result = await service.graph_call(engine().onboarding_check, [v for v in body.vpas if v.strip()][:10])
         result["latencyMs"] = (time.perf_counter() - started) * 1000
         return result
+
+    # ------------------------------------------------------------------ platform
+
+    @router.post("/ingest/payments")
+    async def ingest_payments(request: Request, x_nolambur_signature: str | None = Header(None)):
+        """Webhook for payment events: one Payment, or {"payments": [...]}."""
+        eng = engine()
+        body = await request.body()
+        if infra_settings.RAIL_WEBHOOK_SECRET and not integrations.verify(body, x_nolambur_signature, infra_settings.RAIL_WEBHOOK_SECRET):
+            service.ingest_stats["rejected"] += 1
+            raise HTTPException(status_code=401, detail="bad or missing X-Nolambur-Signature")
+        try:
+            data = json.loads(body)
+            batch = PaymentBatch(**data).payments if isinstance(data, dict) and "payments" in data else [Payment(**data)]
+        except (ValueError, TypeError, ValidationError) as error:
+            service.ingest_stats["rejected"] += 1
+            detail = error.errors() if isinstance(error, ValidationError) else str(error)
+            return JSONResponse({"detail": json.loads(json.dumps(detail, default=str))}, status_code=422)
+        depth = sum(len(p) for _, p in list(service.inbox._queue))  # type: ignore[attr-defined]
+        if depth + len(batch) > MAX_INBOX:
+            return JSONResponse({"detail": "ingest backlog full, retry later", "queued": depth}, status_code=429, headers={"Retry-After": "2"})
+        service.inbox.put_nowait(("webhook", [p.model_dump() for p in batch]))
+        service.ingest_stats["webhookAccepted"] += len(batch)
+        return {
+            "accepted": len(batch),
+            "queued": depth + len(batch),
+            "mode": service.mode,
+            "clock": "replay clock" if not eng.live else "payment timestamp",
+            "paused": service.paused,
+        }
+
+    @router.get("/platform")
+    async def platform() -> dict[str, Any]:
+        return await asyncio.to_thread(service.platform)
+
+    @router.get("/graph/downstream/{account_id}")
+    async def downstream(account_id: str, hops: int = 3, limit: int = 200) -> dict[str, Any]:
+        eng = engine()
+        try:
+            return await service.graph_call(eng.downstream, account_id, max(1, min(hops, 5)), max(1, min(limit, 1000)))
+        except Exception as error:
+            raise HTTPException(status_code=502, detail=f"graph query failed: {error}")
+
+    @router.get("/audit")
+    async def audit(account_id: str | None = None, alert_id: str | None = None, run: str = "current", limit: int = 200) -> dict[str, Any]:
+        """The durable audit trail. run=current scopes to this replay; run=all spans restarts."""
+        eng = engine()
+        if not service.store:
+            raise HTTPException(status_code=503, detail={"store": service.store_error})
+        run_id = eng.run_id if run == "current" else (None if run == "all" else run)
+        entries = await asyncio.to_thread(service.store.audit_trail, run_id=run_id, account_id=account_id, alert_id=alert_id, limit=min(limit, 1000))
+        return {"runId": run_id, "entries": entries}
+
+    @router.get("/roles")
+    async def roles() -> dict[str, Any]:
+        return rbac.describe()
+
+    @router.get("/audit/verify")
+    async def audit_verify() -> dict[str, Any]:
+        """Recompute the audit hash chain; names the first row that was altered."""
+        if not service.store:
+            raise HTTPException(status_code=503, detail={"store": service.store_error})
+        return await asyncio.to_thread(service.store.verify_audit_chain)
+
+    @router.get("/feedback")
+    async def feedback() -> dict[str, Any]:
+        if not service.store:
+            raise HTTPException(status_code=503, detail={"store": service.store_error})
+        return await asyncio.to_thread(infra_feedback.report)
 
     @router.get("/onboarding/presets")
     async def onboarding_presets() -> list[dict[str, Any]]:
@@ -1157,4 +1567,5 @@ def mount(app, load: Callable[[], tuple[pd.DataFrame, Any]], predict_chain: Call
         return service.evaluation
 
     app.include_router(router)
+    app.include_router(sandbox.router())
     return service

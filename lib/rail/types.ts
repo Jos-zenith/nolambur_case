@@ -1,7 +1,8 @@
 // Shapes returned by Multi-GNN/rail_engine.py (the /rail routes on the GNN bridge).
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low'
-export type AlertStatus = 'open' | 'escalated' | 'frozen' | 'cleared' | 'superseded'
+export type AlertStatus = 'open' | 'held' | 'escalated' | 'frozen' | 'cleared' | 'superseded'
+export type RoleName = 'analyst' | 'supervisor' | 'admin'
 export type Detector = 'high_value_new_payee' | 'pass_through' | 'hop_from_flagged' | 'model_only'
 export type Role = 'victim' | 'l1_mule' | 'l2_mule' | 'clean' | 'unknown'
 
@@ -18,7 +19,10 @@ export interface Row {
   amount: number
   gnn: number
   blocked: boolean
-  label: { isFraud: boolean; layer: string }
+  /** replay = a CSV row; webhook / kafka / kinesis = an ingested payment */
+  source: 'replay' | 'webhook' | 'kafka' | 'kinesis'
+  /** null for ingested payments: they carry no label */
+  label: { isFraud: boolean; layer: string } | null
 }
 
 export interface Alert {
@@ -47,8 +51,13 @@ export interface Alert {
 
 export interface Metrics {
   simT: number
+  source: 'replay' | 'webhook' | 'kafka' | 'kinesis'
+  runId: string
   rowsReplayed: number
-  rowsTotal: number
+  /** null in stream mode (no replay) */
+  rowsTotal: number | null
+  ingested: number
+  duplicatesDropped: number
   speed: number
   done: boolean
   txnsLastMinute: number
@@ -62,6 +71,9 @@ export interface Metrics {
   mulesSeen: number
   mulesAlerted: number
   frozenAccounts: number
+  /** accounts on automatic hold (RAIL_AUTO_HOLD), awaiting a supervisor */
+  heldAccounts: number
+  autoHold: boolean
   blockedFraudAmount: number
   blockedGenuineAmount: number
 }
@@ -72,6 +84,9 @@ export interface AuditEntry {
   simT: number
   action: string
   actor: string
+  role?: RoleName | 'system'
+  /** true when a supervisor released a hold or cleared a model score >= 0.9 */
+  override?: boolean
   note: string
   alertId?: string
   accountId?: string
@@ -145,6 +160,83 @@ export interface AlertDetail {
   evidence: Row[]
   otherAlerts: Alert[]
   audit: AuditEntry[]
+  /** Analyst decisions on this account in earlier runs, from the durable store */
+  history: { runId: string; alertId: string; detector: string; decision: string; actor: string; note: string; at: number }[]
+}
+
+export interface PathNode {
+  id: string
+  vpa: string
+  flagged: boolean
+  frozen: boolean
+  truthRole: Role
+}
+
+export interface Downstream {
+  accountId: string
+  hops: number
+  graph: 'memory' | 'neo4j'
+  truncated: boolean
+  paths: { nodes: PathNode[]; legs: { amount: number; t: number; row: number; gnn: number }[] }[]
+  longest: Downstream['paths']
+  accountsReached: number
+  byHop: { hop: number; accounts: number }[]
+  flaggedReached: number
+}
+
+export interface Platform {
+  runId: string | null
+  ingest: {
+    mode: 'replay' | 'webhook' | 'kafka' | 'kinesis'
+    source: { backend: string; state: string; received: number; lastError: string | null; lastAt: number | null; [k: string]: unknown }
+    webhook: { endpoint: string; signed: boolean }
+    inboxDepth: number
+    webhookAccepted: number
+    rejected: number
+    scored: number
+    scoreErrors: number
+    lastScoreError: string | null
+    lastScoreMs: number | null
+    ingestedThisRun: number
+    duplicatesDropped: number
+    lastTickError?: string
+  }
+  graph: { backend: string; persistent: boolean; edges?: number; edgesWritten?: number; pending?: number; uri?: string; error?: string | null; fallbackReason: string | null }
+  store: {
+    backend: string | null
+    url?: string
+    error: string | null
+    writeErrors?: number
+    runs?: number
+    auditEvents?: number
+    decisions?: Record<string, number>
+    agentActions?: number
+    outbox?: Record<string, number>
+    sandbox?: Record<string, number>
+  }
+  integrations: {
+    gateway?: { url: string; sandbox: boolean; signed: boolean }
+    cfcfrms?: { url: string; sandbox: boolean }
+    sms?: { provider: string; mode: string; recipients: number }
+    workerAlive?: boolean
+    recent?: { id: number; kind: string; reference: string | null; status: string; attempts: number; last_error: string | null; created_at: number; delivered_at: number | null; response: Record<string, unknown> | null }[]
+    error?: string | null
+  }
+}
+
+export interface Feedback {
+  decisions: Record<string, number>
+  runs: number
+  labelledEdges: number
+  fraudLabels: number
+  cleanLabels: number
+  agreeWithDataset: number
+  wouldFlip: number
+  freezes: number
+  freezesOnTrueMules: number
+  clears: number
+  clearsOnTrueMules: number
+  lastRetrain: { at: string; exitCode: number; epochs: number; checkpoint: string; promoted: boolean } | null
 }
 
 export interface Investigation {
@@ -166,3 +258,20 @@ export type StreamEvent =
   | { type: 'audit'; entry: AuditEntry }
   | { type: 'frozen'; accountId: string; vpa: string; reference: string | null }
   | { type: 'reset'; snapshot: Snapshot }
+  | { type: 'held'; accountId: string; vpa: string; alertId: string }
+  | { type: 'released'; accountId: string; vpa: string }
+
+export interface Roles {
+  users: { actor: string; role: RoleName }[]
+  permissions: Record<RoleName, string[]>
+  overrideScore: number
+}
+
+export interface AuditVerify {
+  ok: boolean
+  checked: number
+  firstBad: { id: number; entryId: string; action: string; runId: string; reason: string } | null
+  head: string | null
+  unchainedLegacyRows: number
+  checkedAt: number
+}

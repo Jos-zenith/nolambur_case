@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { create } from 'zustand'
 
-import type { Alert, AuditEntry, Case, DatasetFacts, Metrics, Row, Snapshot, StreamEvent } from './types'
+import type { Alert, AuditEntry, Case, DatasetFacts, Metrics, Roles, RoleName, Row, Snapshot, StreamEvent } from './types'
 
 export type BackendState = 'connecting' | 'live' | 'warming' | 'offline' | 'error'
 
@@ -20,6 +20,11 @@ interface RailState {
   frozen: Record<string, string | null>
   tickCounts: number[]
   fresh: Record<string, true>
+  /** who the console acts as; sent as X-Rail-Actor and checked by the bridge */
+  actor: string | null
+  roles: Roles | null
+  setActor: (actor: string) => void
+  setRoles: (roles: Roles) => void
   setBackend: (b: BackendState, error?: string | null) => void
   setPaused: (p: boolean) => void
   load: (s: Snapshot) => void
@@ -39,6 +44,23 @@ export const useRail = create<RailState>(set => ({
   frozen: {},
   tickCounts: [],
   fresh: {},
+  actor: null,
+  roles: null,
+  setActor: actor => {
+    try {
+      localStorage.setItem('rail.actor', actor)
+    } catch {}
+    set({ actor })
+  },
+  setRoles: roles =>
+    set(state => {
+      let saved: string | null = null
+      try {
+        saved = localStorage.getItem('rail.actor')
+      } catch {}
+      const known = (a: string | null) => !!a && roles.users.some(u => u.actor === a)
+      return { roles, actor: known(state.actor) ? state.actor : known(saved) ? saved : roles.users[0]?.actor ?? null }
+    }),
   setBackend: (backend, backendError = null) => set({ backend, backendError }),
   setPaused: paused => set({ paused }),
   load: s =>
@@ -61,7 +83,10 @@ export const useRail = create<RailState>(set => ({
         case 'tick':
           return {
             metrics: e.metrics,
-            rows: e.rows.length ? [...[...e.rows].reverse(), ...state.rows].slice(0, 120) : state.rows,
+            // a reconnect can deliver a row in both the snapshot and the next tick; keep one copy
+            rows: e.rows.length
+              ? [...[...e.rows].reverse(), ...state.rows].filter((r, i, all) => all.findIndex(x => x.row === r.row && x.t === r.t) === i).slice(0, 120)
+              : state.rows,
             tickCounts: [...state.tickCounts, e.rows.length].slice(-60),
           }
         case 'alert':
@@ -73,6 +98,9 @@ export const useRail = create<RailState>(set => ({
           return { audit: [e.entry, ...state.audit].slice(0, 200) }
         case 'frozen':
           return { frozen: { ...state.frozen, [e.accountId]: e.reference } }
+        case 'held':
+        case 'released':
+          return {}
         case 'reset':
           return {
             metrics: e.snapshot.metrics,
@@ -150,8 +178,27 @@ export function useRailStream() {
 export async function railPost<T = unknown>(path: string, body?: unknown): Promise<{ ok: boolean; data: T & { error?: string } }> {
   const res = await fetch(`/api/rail/${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Rail-Actor': useRail.getState().actor ?? '' },
     body: JSON.stringify(body ?? {}),
   })
-  return { ok: res.ok, data: await res.json() }
+  const data = await res.json()
+  // FastAPI puts refusals (401 / 403 / 409) in `detail`; surface them as `error`
+  if (!res.ok && !data.error && typeof data.detail === 'string') data.error = data.detail
+  return { ok: res.ok, data }
+}
+
+export function useRoles() {
+  const roles = useRail(s => s.roles)
+  const actor = useRail(s => s.actor)
+  const backend = useRail(s => s.backend)
+  useEffect(() => {
+    if (roles || backend !== 'live') return
+    fetch('/api/rail/roles', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(r => r && useRail.getState().setRoles(r))
+      .catch(() => {})
+  }, [roles, backend])
+  const role = (roles?.users.find(u => u.actor === actor)?.role ?? null) as RoleName | null
+  const can = (permission: string) => !!role && !!roles?.permissions[role]?.includes(permission)
+  return { roles, actor, role, can }
 }

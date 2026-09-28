@@ -12,10 +12,10 @@ flagged transaction
 └─────┬───────┘
       ▼
 ┌─────────────┐   get_account_profile / list_downstream_transfers ← real Nolambur data
-│ INVESTIGATOR│   check_suspect_registry                          ← SIMULATED (mock NPCI)
+│ INVESTIGATOR│   check_suspect_registry                          ← SANDBOXED (mock NPCI REST)
 └─────┬───────┘
       ▼
-┌─────────────┐   freeze_account / file_1930_report               ← SIMULATED (action_log.jsonl)
+┌─────────────┐   freeze_account / file_1930_report               ← SANDBOXED (outbox → mock gateway / portal)
 │ COORDINATOR │   notify_officer                                  ← real Twilio SMS if configured
 └─────┬───────┘
       ▼
@@ -33,8 +33,8 @@ flagged transaction
 | `score_transaction`, `score_transfer_chain` | real GIN checkpoint via `bridge_api.py` `/predict`, spliced onto the real background graph |
 | `get_account_profile`, `list_downstream_transfers` | real rows from `nolambur_transactions.csv` + `nolambur_labels.csv` |
 | `watch_downstream_stream` | real `bridge_api.py` `/stream` (a **replay** of scored synthetic transactions, not a live feed) |
-| `check_suspect_registry` | **simulated** — mock NPCI registry, result derived from the synthetic `is_mule` label |
-| `freeze_account`, `file_1930_report` | **simulated** — no bank / RBI / CFCFRMS API; appended to `action_log.jsonl` |
+| `check_suspect_registry` | **sandboxed** — HTTP GET to `/sandbox/npci/suspects/{vpa}` (or `NPCI_REGISTRY_URL`); the mock's answer is derived from the synthetic `is_mule` label |
+| `freeze_account`, `file_1930_report` | **sandboxed** — real HTTP through `infra/integrations.py`'s outbox (signed, retried), by default to the bridge's mock gateway and mock 1930 portal (`/sandbox/*`); set `GATEWAY_WEBHOOK_URL` / `CFCFRMS_URL` to change. Also appended to `action_log.jsonl` |
 | `notify_officer` | **real Twilio SMS** when `TWILIO_*` env vars are set; otherwise dry-run (logged to `action_log.jsonl`) |
 
 The orchestrator prompt tells Claude which is which, and requires an independent

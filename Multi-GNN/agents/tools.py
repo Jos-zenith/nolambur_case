@@ -88,7 +88,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "name": "check_suspect_registry",
         "description": (
-            "INVESTIGATOR. SIMULATED NPCI suspect-registry lookup (no real registry access). "
+            "INVESTIGATOR. NPCI suspect-registry lookup over HTTP (the mock registry unless NPCI_REGISTRY_URL is set). "
             "Returns whether the VPA is listed and a mock record."
         ),
         "input_schema": {
@@ -115,9 +115,9 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "name": "freeze_account",
         "description": (
-            "COORDINATOR. SIMULATED account freeze (no bank/RBI API). Recorded to "
-            "action_log.jsonl. Only call when a high score is corroborated by an "
-            "independent signal."
+            "COORDINATOR. Account freeze: queues an HMAC-signed freeze instruction to the "
+            "bank gateway webhook (the sandbox gateway unless GATEWAY_WEBHOOK_URL is set). "
+            "Only call when a high score is corroborated by an independent signal."
         ),
         "input_schema": {
             "type": "object",
@@ -131,8 +131,8 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "name": "file_1930_report",
         "description": (
-            "COORDINATOR. SIMULATED CFCFRMS / 1930 case filing (no real API). Recorded to "
-            "action_log.jsonl."
+            "COORDINATOR. CFCFRMS / 1930 complaint: POSTs to the portal (the mock portal "
+            "unless CFCFRMS_URL is set) and returns its acknowledgement number."
         ),
         "input_schema": {
             "type": "object",

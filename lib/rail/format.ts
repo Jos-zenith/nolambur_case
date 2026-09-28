@@ -45,3 +45,6 @@ export const ROLE_LABEL: Record<Role, string> = {
 }
 
 export const pct = (x: number | null | undefined) => (x === null || x === undefined ? '—' : `${Math.round(x * 100)}%`)
+
+/** Dataset label for a row; ingested payments have none. */
+export const rowLabel = (r: { label: { isFraud: boolean; layer: string } | null }) => (r.label ? (r.label.isFraud ? r.label.layer : 'clean') : 'unlabelled')

@@ -6,6 +6,8 @@ import { Section, Table } from '@/components/rail/bits'
 import { ScoreHistogram, TrainingCurve } from '@/components/rail/charts'
 import { duration, inr, pct } from '@/lib/rail/format'
 import { useRail } from '@/lib/rail/store'
+import { BrainCircuit } from 'lucide-react'
+import { PageHeader, Term } from '@/components/rail/kit'
 
 type PRF = { tp: number; fp: number; fn: number; precision: number; recall: number; f1: number }
 type Evaluation = {
@@ -34,6 +36,16 @@ type Evaluation = {
     medianLeadSec: number | null
     byDetector: { detector: string; label: string; alerts: number; mules: number; precision: number | null }[]
   }
+  autoHold?: {
+    policy: string
+    accountsHeld: number
+    mulesHeld: number
+    fraudTotal: number
+    fraudBlocked: number
+    genuineBlocked: number
+    medianSecondsToHold: number | null
+    note: string
+  }
 }
 
 const PIPELINE = [
@@ -42,8 +54,8 @@ const PIPELINE = [
   ['prepare_datasets.py', 'encodes accounts, timestamps, amounts as a graph'],
   ['finetune_local_nolambur.py', 'trains GINe, writes the checkpoint + norm stats'],
   ['bridge_api.py', 'scores every edge in one full-graph pass; /predict for new edges'],
-  ['rail_engine.py', 'replays rows in time order, runs rules, serves /rail'],
-  ['agents/tools_impl.py', 'investigate, freeze, 1930 report, SMS → action_log.jsonl'],
+  ['rail_engine.py', 'replays rows or ingests a live stream, runs rules, serves /rail'],
+  ['infra/', 'audit store, graph store, outbox to gateway + 1930 portal, feedback retrain'],
   ['This console', 'Next.js; proxies /api/rail to the bridge'],
 ]
 
@@ -61,13 +73,20 @@ export default function ModelPage() {
 
   return (
     <div className="grid max-w-5xl gap-8">
-      <div>
-        <h1 className="text-[18px] font-semibold">Model and evaluation</h1>
-        <p className="mt-1 max-w-3xl text-[13.5px] leading-relaxed text-muted-foreground">
-          How the pieces fit, what the GIN checkpoint scores, and how the console&apos;s detectors perform against the dataset labels. Every number here is
-          computed by the bridge from the files in <code className="font-mono">Multi-GNN/</code> when it starts.
-        </p>
-      </div>
+      <PageHeader
+        icon={BrainCircuit}
+        eyebrow="Measured at bridge start-up"
+        title="Model and evaluation"
+        guideKey="model"
+        guide={[
+          { title: 'The pipeline', body: 'From generating the data to scoring it: each box is a real file in Multi-GNN/.' },
+          { title: 'Detectors vs labels', body: <>Account-level <Term k="precision">precision</Term> and <Term k="recall">recall</Term> from a full replay with nobody acting.</> },
+          { title: 'What the model adds', body: <>The <Term k="gin">GIN</Term> checkpoint finds mules the rules miss, at the same precision.</> },
+          { title: 'Read the caveats', body: 'Synthetic, easy-to-separate data: treat these as pipeline checks, not a claim about real traffic.' },
+        ]}
+      >
+        Every number here is computed by the bridge from the files in <code className="font-mono">Multi-GNN/</code> when it starts. Nothing is typed in by hand.
+      </PageHeader>
 
       <Section title="Pipeline">
         <ol className="grid gap-px border bg-border sm:grid-cols-2 lg:grid-cols-4">
@@ -92,7 +111,7 @@ export default function ModelPage() {
               <b>{pct(ev.detectors.combined.recall)}</b> at the same precision.{' '}
               {ev.detectors.combined.fn === ev.detectors.mulesSendOnly
                 ? `All ${ev.detectors.combined.fn} still missed are first-layer mules that only ever send money in this data, so nothing on the receiving side can see them.`
-                : `Of the ${ev.detectors.combined.fn} still missed, ${ev.detectors.mulesSendOnly} are first-layer mules that only ever send money in this data, so nothing on the receiving side can see them.`}
+                : `Of the ${ev.detectors.combined.fn} still missed, ${ev.detectors.mulesSendOnly} are first-layer mules that only ever send money in this data, so nothing on the receiving side can see them.`}{' '}
               Median lead time from alert to the money moving on: <b>{duration(ev.detectors.medianLeadSec)}</b>.
             </p>
             <Table head={['Approach', 'Accounts flagged', 'Mules caught', 'False positives', 'Precision', 'Recall', 'F1']} right={[1, 2, 3, 4, 5, 6]}>
@@ -217,6 +236,18 @@ export default function ModelPage() {
               </Table>
             </div>
           </Section>
+
+          {ev.autoHold && (
+            <Section title="Automatic hold" note={`${ev.autoHold.policy} · full replay, no analyst acting`}>
+              <p className="max-w-3xl text-[13.5px] leading-relaxed">
+                With only the policy acting, the engine holds <b>{ev.autoHold.accountsHeld}</b> accounts, of which <b>{ev.autoHold.mulesHeld}</b> are labelled
+                mules. It blocks <b>{inr(ev.autoHold.fraudBlocked)}</b> of the {inr(ev.autoHold.fraudTotal)} of fraud in the data (
+                {pct(ev.autoHold.fraudTotal ? ev.autoHold.fraudBlocked / ev.autoHold.fraudTotal : null)}) and <b>{inr(ev.autoHold.genuineBlocked)}</b> of genuine
+                payments. Median time from first evidence to hold: <b>{duration(ev.autoHold.medianSecondsToHold)}</b>. Most fraud money is the victims&apos; first
+                transfers, which arrive before any alert can exist; what a hold stops is the onward movement.
+              </p>
+            </Section>
+          )}
 
           <Section title="Checkpoint">
             <dl className="grid gap-x-6 border bg-card p-3 text-[13px] sm:grid-cols-2">

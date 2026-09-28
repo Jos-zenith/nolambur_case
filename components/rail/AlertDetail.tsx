@@ -4,10 +4,13 @@ import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
-import { duration, inr, stamp } from '@/lib/rail/format'
-import { railPost, useRail } from '@/lib/rail/store'
-import type { AlertDetail as Detail, Investigation } from '@/lib/rail/types'
+import { duration, inr, rowLabel, stamp } from '@/lib/rail/format'
+import { railPost, useRail, useRoles } from '@/lib/rail/store'
+import type { AlertDetail as Detail, Downstream, Investigation } from '@/lib/rail/types'
 import { cn } from '@/lib/utils'
+import { Lock, MessageSquareText } from 'lucide-react'
+
+import { Callout } from './kit'
 import { MoneyTrail } from './MoneyTrail'
 import { Score, Section, SeverityBadge, StatusText, Table, TruthTag } from './bits'
 
@@ -43,7 +46,7 @@ export function AlertDetail({ alertId, onSelect, showLabels }: { alertId: string
 
   return (
     <Panel>
-      <header className="border-b px-4 py-3">
+      <header className={cn('border-b px-4 py-3.5', HEADER_WASH[a.severity])}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted-foreground">
           <SeverityBadge severity={a.severity} />
           <span>{a.detectorLabel}</span>
@@ -60,7 +63,12 @@ export function AlertDetail({ alertId, onSelect, showLabels }: { alertId: string
             </span>
           </span>
         </div>
-        <h2 className="mt-2 text-[17px] font-semibold leading-snug">{a.title}</h2>
+        <h2 className="mt-2 text-[18px] font-semibold leading-snug tracking-tight">{a.title}</h2>
+        {a.status === 'held' && (
+          <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-sev-critical px-2 py-1 text-[12px] font-medium text-white">
+            <Lock className="size-3.5" /> On hold: transfers to and from this account are blocked until a supervisor decides
+          </p>
+        )}
         <p className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
           <span className="font-mono text-foreground">{a.vpa}</span>
           <span>
@@ -72,7 +80,9 @@ export function AlertDetail({ alertId, onSelect, showLabels }: { alertId: string
 
       <div className="grid gap-5 px-4 py-4">
         <section>
-          <p className="max-w-3xl text-[13.5px] leading-relaxed">{a.reason}</p>
+          <Callout icon={MessageSquareText} title="Why this fired" className="max-w-3xl">
+            {a.reason}
+          </Callout>
           <dl className="mt-3 grid grid-cols-1 border-t sm:grid-cols-2">
             {[...a.facts, { label: 'Highest GNN score in evidence', value: a.gnnMax.toFixed(3) }, ...(a.leadSeconds !== null ? [{ label: 'Lead time before money moved on', value: duration(a.leadSeconds) }] : [])].map(f => (
               <div key={f.label} className="flex justify-between gap-4 border-b py-1.5 text-[13px] sm:odd:mr-4">
@@ -83,7 +93,7 @@ export function AlertDetail({ alertId, onSelect, showLabels }: { alertId: string
           </dl>
         </section>
 
-        <ActionBar alertId={a.id} status={a.status} caseId={a.caseId} />
+        <ActionBar alertId={a.id} status={a.status} caseId={a.caseId} gnnMax={a.gnnMax} />
 
         <Investigate alertId={a.id} />
 
@@ -111,17 +121,17 @@ export function AlertDetail({ alertId, onSelect, showLabels }: { alertId: string
           </dl>
         </Section>
 
-        <Section title="Evidence rows" note={`${a.rows.length} rows of nolambur_transactions.csv, latest ${detail.evidence.length} shown`}>
-          <Table head={['CSV row', 'Time', 'From', 'To', 'Amount', 'GNN', ...(showLabels ? ['Label'] : [])]} right={[4]}>
+        <Section title="Evidence rows" note={`${a.rows.length} transfers, latest ${detail.evidence.length} shown`}>
+          <Table head={['Row', 'Time', 'From', 'To', 'Amount', 'GNN', ...(showLabels ? ['Label'] : [])]} right={[4]}>
             {detail.evidence.map(r => (
               <tr key={r.row} className="border-b last:border-0">
-                <td className="py-1.5 pr-3 font-mono text-[12px]">#{r.row}</td>
+                <td className="py-1.5 pr-3 font-mono text-[12px]">{r.source === 'replay' ? `#${r.row}` : r.source}</td>
                 <td className="py-1.5 pr-3 font-mono text-[12px]">{stamp(r.t)}</td>
                 <td className="max-w-[170px] truncate py-1.5 pr-3 font-mono text-[12px]">{r.fromVpa}</td>
                 <td className="max-w-[170px] truncate py-1.5 pr-3 font-mono text-[12px]">{r.toVpa}</td>
                 <td className="py-1.5 pr-3 text-right font-mono text-[12.5px]">{inr(r.amount)}</td>
                 <td className="py-1.5 pr-3"><Score value={r.gnn} /></td>
-                {showLabels && <td className="py-1.5 font-mono text-[11.5px] text-muted-foreground">{r.label.isFraud ? r.label.layer : 'clean'}</td>}
+                {showLabels && <td className="py-1.5 font-mono text-[11.5px] text-muted-foreground">{rowLabel(r)}</td>}
               </tr>
             ))}
           </Table>
@@ -142,7 +152,25 @@ export function AlertDetail({ alertId, onSelect, showLabels }: { alertId: string
           </Section>
         )}
 
-        <Section title="Activity" note="append-only; tool calls also go to Multi-GNN/agents/action_log.jsonl">
+        <FollowMoney accountId={a.accountId} onSelect={onSelect} />
+
+        {detail.history.length > 0 && (
+          <Section title="Earlier decisions on this account" note="from the audit store, across restarts">
+            <ol className="text-[13px]">
+              {detail.history.map(h => (
+                <li key={`${h.runId}-${h.alertId}-${h.at}`} className="grid grid-cols-[130px_1fr] gap-3 border-b py-1.5 last:border-0">
+                  <span className="font-mono text-[12px] text-muted-foreground">{new Date(h.at * 1000).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                  <span>
+                    <span className="font-medium">{h.actor}</span> · {h.decision} on {h.alertId} ({h.detector.replace(/_/g, ' ')}). {h.note}
+                    <span className="ml-1 font-mono text-[11.5px] text-muted-foreground">run {h.runId}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </Section>
+        )}
+
+        <Section title="Activity" note="append-only; persisted to the audit store, tool calls also to agents/action_log.jsonl">
           {detail.audit.length === 0 ? (
             <p className="text-[13px] text-muted-foreground">No analyst activity yet.</p>
           ) : (
@@ -151,7 +179,9 @@ export function AlertDetail({ alertId, onSelect, showLabels }: { alertId: string
                 <li key={e.id} className="grid grid-cols-[130px_1fr] gap-3 border-b py-1.5 last:border-0">
                   <span className="font-mono text-[12px] text-muted-foreground">{stamp(e.simT)}</span>
                   <span>
-                    <span className="font-medium">{e.actor}</span> · {e.action.replace(/_/g, ' ')}. {e.note}
+                    <span className="font-medium">{e.actor}</span>
+                    {e.role && e.role !== 'system' && <span className="text-muted-foreground"> ({e.role})</span>} · {e.action.replace(/_/g, ' ')}
+                    {e.override && <span className="ml-1 rounded-sm bg-sev-high-bg px-1 text-[11px] text-sev-high">model override</span>}. {e.note}
                     {e.tool && typeof e.tool.freeze_reference === 'string' && <span className="ml-1 font-mono text-[12px] text-muted-foreground">[{e.tool.freeze_reference}]</span>}
                   </span>
                 </li>
@@ -234,10 +264,15 @@ const ACTIONS = [
   { id: 'freeze', label: 'Freeze account', cls: 'bg-sev-critical text-white hover:opacity-90' },
 ] as const
 
-function ActionBar({ alertId, status, caseId }: { alertId: string; status: string; caseId: string | null }) {
+function ActionBar({ alertId, status, caseId, gnnMax }: { alertId: string; status: string; caseId: string | null; gnnMax: number }) {
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
+  const { roles, role, can } = useRoles()
   useEffect(() => setNote(''), [alertId])
+  const overrideAt = roles?.overrideScore ?? 0.9
+  // Mirrors the bridge's check; the bridge is what actually enforces it.
+  const needs = (id: string) => (id === 'clear' && (status === 'held' || gnnMax >= overrideAt) ? 'override' : id)
+  const label = (id: string, fallback: string) => (id === 'clear' && status === 'held' ? 'Release hold' : id === 'freeze' && status === 'held' ? 'Confirm freeze' : fallback)
 
   const run = async (action: string) => {
     if (!note.trim()) return toast.error('Add a note first', { description: 'Every action is logged with its reason.' })
@@ -247,10 +282,10 @@ function ActionBar({ alertId, status, caseId }: { alertId: string; status: strin
     if (!ok) return toast.error(data.error ?? 'Action failed')
     setNote('')
     if (action === 'freeze') {
-      toast.success(`Frozen via agents.tools_impl.freeze_account`, {
-        description: `${String(data.tool?.freeze_reference ?? '')} · written to agents/action_log.jsonl · ${data.alert.caseId}`,
+      toast.success('Frozen: instruction queued to the bank gateway', {
+        description: `${String(data.tool?.freeze_reference ?? '')} · outbox · ${data.alert.caseId}`,
       })
-    } else toast.success(action === 'clear' ? 'Alert cleared' : `Escalated to ${data.alert.caseId}`)
+    } else toast.success(action === 'clear' ? (status === 'held' ? 'Hold released' : 'Alert cleared') : `Filed to ${data.alert.caseId}`)
   }
 
   const done = status === 'cleared' || status === 'frozen' || status === 'superseded'
@@ -268,6 +303,9 @@ function ActionBar({ alertId, status, caseId }: { alertId: string; status: strin
         </p>
       ) : (
         <div className="flex flex-col gap-2 lg:flex-row lg:items-start">
+          {status === 'held' && (
+            <p className="text-[13px] lg:hidden">Held automatically. Transfers are blocked until a supervisor confirms or releases.</p>
+          )}
           <textarea
             value={note}
             onChange={e => setNote(e.target.value)}
@@ -276,17 +314,33 @@ function ActionBar({ alertId, status, caseId }: { alertId: string; status: strin
             className="min-h-[52px] flex-1 resize-y rounded-sm border bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-primary"
           />
           <div className="flex flex-wrap gap-2">
-            {ACTIONS.filter(x => !(status === 'escalated' && x.id === 'escalate')).map(x => (
-              <button key={x.id} onClick={() => run(x.id)} disabled={busy !== null} className={cn('h-8 rounded-sm px-3 text-[13px] font-medium disabled:opacity-50', x.cls)}>
-                {busy === x.id ? 'Saving…' : x.label}
-              </button>
-            ))}
+            {ACTIONS.filter(x => !(status === 'escalated' && x.id === 'escalate')).map(x => {
+              const allowed = can(needs(x.id))
+              const why = allowed ? undefined : `${needs(x.id) === 'override' ? 'Overriding the model' : x.label} needs a supervisor. You are ${role ?? 'not signed in'}.`
+              return (
+                <button
+                  key={x.id}
+                  onClick={() => run(x.id)}
+                  disabled={busy !== null || !allowed}
+                  title={why}
+                  className={cn('h-8 rounded-sm px-3 text-[13px] font-medium disabled:cursor-not-allowed disabled:opacity-40', x.cls)}
+                >
+                  {busy === x.id ? 'Saving…' : label(x.id, x.label)}
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
-      {!done && caseId && (
+      {!done && (
         <p className="mt-2 text-[12px] text-muted-foreground">
-          Part of <Link href={`/cases/${caseId}`} className="text-primary underline underline-offset-2">{caseId}</Link>.
+          {status === 'held' && <span className="hidden text-sev-critical lg:inline">Held automatically: transfers are blocked until a supervisor confirms or releases. </span>}
+          {caseId && (
+            <>
+              Part of <Link href={`/cases/${caseId}`} className="text-primary underline underline-offset-2">{caseId}</Link>.{' '}
+            </>
+          )}
+          {role === 'analyst' && 'Freezing, and clearing anything the model scored 0.9 or higher, needs a supervisor.'}
         </p>
       )}
     </section>
@@ -294,5 +348,82 @@ function ActionBar({ alertId, status, caseId }: { alertId: string; status: strin
 }
 
 function Panel({ children }: { children: React.ReactNode }) {
-  return <div className="min-w-0 border bg-card">{children}</div>
+  return <div className="min-w-0 overflow-hidden rounded-lg border bg-card shadow-card">{children}</div>
+}
+
+const HEADER_WASH = {
+  critical: 'bg-sev-critical-bg/60',
+  high: 'bg-sev-high-bg/60',
+  medium: 'bg-sev-medium-bg/60',
+  low: 'bg-sev-low-bg/60',
+} as const
+
+/** Time-respecting paths out of the account, from the graph store (memory or Neo4j). */
+function FollowMoney({ accountId, onSelect }: { accountId: string; onSelect: (id: string) => void }) {
+  const alerts = useRail(s => s.alerts)
+  const [hops, setHops] = useState(3)
+  const [result, setResult] = useState<Downstream | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => setResult(null), [accountId])
+
+  const run = async (n: number) => {
+    setHops(n)
+    setBusy(true)
+    setError(null)
+    const res = await fetch(`/api/rail/graph/downstream/${encodeURIComponent(accountId)}?hops=${n}`, { cache: 'no-store' })
+    const body = await res.json()
+    if (res.ok) setResult(body)
+    else setError(typeof body.detail === 'string' ? body.detail : 'Graph query failed')
+    setBusy(false)
+  }
+  const alertFor = (id: string) => Object.values(alerts).find(x => x.accountId === id && x.status !== 'cleared' && x.status !== 'superseded')
+
+  return (
+    <Section
+      title="Follow the money"
+      note={result ? `${result.graph} graph · each hop at or after the one before it · blocked transfers excluded` : 'multi-hop query on the graph store'}
+    >
+      <div className="mb-2 flex flex-wrap items-center gap-1">
+        {[2, 3, 4, 5].map(n => (
+          <button key={n} disabled={busy} onClick={() => run(n)} className={cn('h-7 rounded-sm border px-2.5 text-[12px] hover:bg-accent', result && hops === n && 'border-primary bg-accent')}>
+            {n} hops
+          </button>
+        ))}
+        {busy && <span className="text-[12px] text-muted-foreground">Querying…</span>}
+      </div>
+      {error && <p className="text-[13px] text-sev-critical">{error}</p>}
+      {result && (
+        <div className="grid gap-2 text-[13px]">
+          <p>
+            Reaches <span className="font-medium">{result.accountsReached}</span> accounts
+            {result.byHop.length > 0 && <> ({result.byHop.map(h => `hop ${h.hop}: ${h.accounts}`).join(', ')})</>}.{' '}
+            <span className={result.flaggedReached ? 'text-sev-high' : ''}>{result.flaggedReached} already flagged.</span>
+            {result.truncated && <span className="text-muted-foreground"> Capped at {result.paths.length} paths.</span>}
+          </p>
+          {result.longest.length > 0 && (
+            <ol className="grid gap-1">
+              {result.longest.slice(0, 8).map((p, i) => (
+                <li key={i} className="flex flex-wrap items-center gap-1 border-b pb-1 font-mono text-[11.5px] last:border-0">
+                  {p.nodes.map((n, j) => {
+                    const hit = j > 0 ? alertFor(n.id) : undefined
+                    return (
+                      <span key={j} className="flex items-center gap-1">
+                        {j > 0 && <span className="text-muted-foreground">→ {inr(p.legs[j - 1].amount)} →</span>}
+                        {hit ? (
+                          <button onClick={() => onSelect(hit.id)} className={cn('hover:underline', n.frozen ? 'text-sev-critical' : 'text-sev-high')}>{n.vpa}</button>
+                        ) : (
+                          <span className={cn(n.frozen && 'text-sev-critical', n.flagged && 'text-sev-high')}>{n.vpa}</span>
+                        )}
+                      </span>
+                    )
+                  })}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
+    </Section>
+  )
 }

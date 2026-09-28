@@ -7,6 +7,8 @@ import { Table } from '@/components/rail/bits'
 import { stamp } from '@/lib/rail/format'
 import { railPost, useRail } from '@/lib/rail/store'
 import { cn } from '@/lib/utils'
+import { ScanSearch } from 'lucide-react'
+import { PageHeader, Term } from '@/components/rail/kit'
 
 type Party = { accountId: string; vpa: string; frozen: boolean; alerts: string[]; via?: string }
 type Result = {
@@ -44,14 +46,20 @@ export default function OnboardingPage() {
 
   return (
     <div className="grid gap-4">
-      <div>
-        <h1 className="text-[18px] font-semibold">Onboarding check</h1>
-        <p className="mt-1 max-w-3xl text-[13px] text-muted-foreground">
-          Before a merchant goes live, check the settlement VPAs it gives you against the transaction graph the replay has seen so far. A direct
-          transfer with a flagged or frozen account holds the merchant. A second-hop link only means watch it. Company-director links need MCA data,
-          which this dataset does not have.
-        </p>
-      </div>
+      <PageHeader
+        icon={ScanSearch}
+        eyebrow="Before a merchant goes live"
+        title="Onboarding check"
+        guideKey="onboarding"
+        guide={[
+          { title: 'Enter settlement VPAs', body: <>Paste the <Term k="vpa">VPAs</Term> the merchant wants payouts sent to, or pick a sample built from the real data.</> },
+          { title: 'We walk the graph', body: 'Every account these VPAs have paid or been paid by, then everyone those accounts dealt with: two hops out.' },
+          { title: 'Direct link = hold', body: <>A transfer with a flagged or frozen account, or a transfer the GNN scores 0.9+, holds the merchant for review.</> },
+          { title: 'Second hop = watch', body: 'A link only through someone else is a reason to monitor, not to refuse. Director links need MCA data, which this dataset lacks.' },
+        ]}
+      >
+        Keep <Term k="mule">mules</Term> off the platform in the first place: check a new merchant against everything the engine has seen so far.
+      </PageHeader>
       <BackendGate>
         <div className="grid gap-4 lg:grid-cols-[400px_1fr]">
           <form

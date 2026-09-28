@@ -7,6 +7,8 @@ import { BackendGate } from '@/components/rail/BackendGate'
 import { stamp } from '@/lib/rail/format'
 import { useRail } from '@/lib/rail/store'
 import type { Snapshot } from '@/lib/rail/types'
+import { Briefcase } from 'lucide-react'
+import { PageHeader, Term } from '@/components/rail/kit'
 
 export default function CasesPage() {
   const [snap, setSnap] = useState<Snapshot | null>(null)
@@ -26,13 +28,20 @@ export default function CasesPage() {
 
   return (
     <div className="grid gap-4">
-      <div>
-        <h1 className="text-[18px] font-semibold">Cases</h1>
-        <p className="mt-1 max-w-3xl text-[13px] text-muted-foreground">
-          A case opens when an analyst escalates or freezes. Accounts that sent to or received from an account already in a case join it. Each case
-          exports an evidence pack and can file a 1930 report through the agent tools.
-        </p>
-      </div>
+      <PageHeader
+        icon={Briefcase}
+        eyebrow="Incident response"
+        title="Cases"
+        guideKey="cases"
+        guide={[
+          { title: 'A case opens itself', body: 'When an analyst escalates or freezes, or the auto-hold fires. Linked accounts join the same case.' },
+          { title: 'Open the evidence pack', body: <>Accounts, transfers, alerts and every action in one <Term k="evidence pack">evidence pack</Term>, printable as a PDF.</> },
+          { title: 'Report to 1930', body: <>A supervisor files the <Term k="1930">1930</Term> complaint and notifies the on-call officer by SMS.</> },
+          { title: 'Everything is logged', body: <>Each step is written to the hash-chained <Term k="audit trail">audit trail</Term>.</> },
+        ]}
+      >
+        One case per mule network, not per alert, so the whole chain is reported together.
+      </PageHeader>
       <BackendGate>
         <section className="border bg-card">
           {!snap ? (

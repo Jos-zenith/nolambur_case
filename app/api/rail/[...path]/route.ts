@@ -9,7 +9,8 @@ async function proxy(request: Request, { params }: { params: Promise<{ path: str
   try {
     const upstream = await fetch(url, {
       method: request.method,
-      headers: { 'Content-Type': 'application/json', Accept: request.headers.get('accept') ?? '*/*' },
+      // X-Rail-Actor is the console's user picker. In production an auth proxy would set it from a verified session.
+      headers: { 'Content-Type': 'application/json', Accept: request.headers.get('accept') ?? '*/*', 'X-Rail-Actor': request.headers.get('x-rail-actor') ?? '' },
       body: request.method === 'GET' ? undefined : await request.text(),
       cache: 'no-store',
       signal: request.signal,

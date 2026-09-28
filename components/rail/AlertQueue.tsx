@@ -5,11 +5,21 @@ import { useMemo, useState } from 'react'
 import { ago } from '@/lib/rail/format'
 import { sortAlerts, useRail } from '@/lib/rail/store'
 import type { AlertStatus } from '@/lib/rail/types'
+import { Lock } from 'lucide-react'
+
 import { cn } from '@/lib/utils'
 import { SeverityBadge, StatusText, TruthTag } from './bits'
 
+// A coloured left edge on each row, so severity reads down the list at a glance (the badge carries the label).
+const SEV_EDGE = {
+  critical: 'shadow-[inset_3px_0_0_var(--sev-critical)]',
+  high: 'shadow-[inset_3px_0_0_var(--sev-high)]',
+  medium: 'shadow-[inset_3px_0_0_var(--sev-medium)]',
+  low: 'shadow-[inset_3px_0_0_var(--sev-low)]',
+} as const
+
 const FILTERS: { id: string; label: string; match: (s: AlertStatus) => boolean }[] = [
-  { id: 'open', label: 'Open', match: s => s === 'open' },
+  { id: 'open', label: 'Open', match: s => s === 'open' || s === 'held' },
   { id: 'actioned', label: 'Actioned', match: s => s === 'escalated' || s === 'frozen' },
   { id: 'cleared', label: 'Cleared', match: s => s === 'cleared' },
   { id: 'all', label: 'All', match: () => true },
@@ -32,19 +42,20 @@ export function AlertQueue({ selectedId, onSelect, showLabels }: { selectedId: s
   }, [alerts, filter])
 
   return (
-    <section className="flex h-full max-h-[60vh] min-h-0 flex-col border bg-card lg:max-h-none">
-      <div className="flex items-center justify-between border-b px-3 py-2">
-        <h2 className="text-[13px] font-semibold">Alert queue</h2>
+    <section className="flex h-full max-h-[60vh] min-h-0 flex-col overflow-hidden rounded-lg border bg-card shadow-card lg:max-h-none">
+      <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2.5">
+        <h2 className="text-[13px] font-semibold">Alerts</h2>
         <span className="text-[11.5px] text-muted-foreground">severity, then score (rule + 10 × GNN)</span>
       </div>
-      <div className="flex border-b px-1.5 text-[12.5px]">
+      <div className="flex gap-1 border-b p-1.5 text-[12.5px]">
         {FILTERS.map(f => (
           <button
             key={f.id}
             onClick={() => setFilter(f.id)}
-            className={cn('-mb-px border-b-2 px-2 py-1.5 text-muted-foreground hover:text-foreground', filter === f.id ? 'border-primary text-foreground' : 'border-transparent')}
+            className={cn('flex items-center gap-1.5 rounded-md px-2.5 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground', filter === f.id && 'bg-brand-1 text-white hover:bg-brand-1 hover:text-white')}
           >
-            {f.label} <span className="tabular-nums">{counts[f.id] ?? 0}</span>
+            {f.label}
+            <span className={cn('rounded-full px-1.5 text-[11px] tabular-nums', filter === f.id ? 'bg-white/20' : 'bg-muted')}>{counts[f.id] ?? 0}</span>
           </button>
         ))}
       </div>
@@ -60,9 +71,10 @@ export function AlertQueue({ selectedId, onSelect, showLabels }: { selectedId: s
               <button
                 onClick={() => onSelect(a.id)}
                 className={cn(
-                  'grid w-full grid-cols-[64px_1fr_auto] items-start gap-2 border-b px-3 py-2.5 text-left hover:bg-accent',
-                  selectedId === a.id && 'bg-accent shadow-[inset_2px_0_0_var(--primary)]',
-                  fresh[a.id] && 'row-in',
+                  'grid w-full grid-cols-[64px_1fr_auto] items-start gap-2 border-b px-3 py-2.5 text-left transition-colors hover:bg-accent/70',
+                  SEV_EDGE[a.severity],
+                  selectedId === a.id && 'bg-brand-soft/70 hover:bg-brand-soft/70',
+                  fresh[a.id] && (a.severity === 'critical' ? 'glow-critical' : 'row-in'),
                 )}
               >
                 <SeverityBadge severity={a.severity} className="mt-0.5 w-fit" />
@@ -75,7 +87,10 @@ export function AlertQueue({ selectedId, onSelect, showLabels }: { selectedId: s
                 </span>
                 <span className="text-right">
                   <span className="block font-mono text-[13px] tabular-nums">{a.score}</span>
-                  <StatusText status={a.status} />
+                  <span className="inline-flex items-center gap-1">
+                    {a.status === 'held' && <Lock className="size-3 text-sev-critical" />}
+                    <StatusText status={a.status} />
+                  </span>
                 </span>
               </button>
             </li>

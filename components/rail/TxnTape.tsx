@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 
-import { clock, inr } from '@/lib/rail/format'
+import { clock, inr, rowLabel } from '@/lib/rail/format'
 import { useRail } from '@/lib/rail/store'
 import type { Row } from '@/lib/rail/types'
 import { cn } from '@/lib/utils'
@@ -36,7 +36,7 @@ export function TxnTape({ showLabels }: { showLabels: boolean }) {
           <thead>
             <tr className="border-b text-left text-[12px] text-muted-foreground">
               <th className="px-3 py-1.5 font-normal">Time</th>
-              <th className="px-3 py-1.5 font-normal">CSV row</th>
+              <th className="px-3 py-1.5 font-normal" title="CSV row number, or the ingest source for a live payment">Row</th>
               <th className="px-3 py-1.5 font-normal">From</th>
               <th className="px-3 py-1.5 font-normal">To</th>
               <th className="px-3 py-1.5 font-normal">States</th>
@@ -51,7 +51,7 @@ export function TxnTape({ showLabels }: { showLabels: boolean }) {
               return (
                 <tr key={`${r.row}-${r.t}`} className={cn('border-b last:border-0', r.blocked ? 'bg-sev-critical-bg/60 text-muted-foreground line-through decoration-sev-critical/50' : hot && 'bg-sev-high-bg/50')}>
                   <td className="px-3 py-1 font-mono text-muted-foreground">{clock(r.t)}</td>
-                  <td className="px-3 py-1 font-mono text-muted-foreground">#{r.row}</td>
+                  <td className="px-3 py-1 font-mono text-muted-foreground">{r.source === 'replay' ? `#${r.row}` : <span className="rounded-sm bg-accent px-1 text-foreground">{r.source}</span>}</td>
                   <td className="max-w-[170px] truncate px-3 py-1 font-mono">{r.fromVpa}</td>
                   <td className="max-w-[170px] truncate px-3 py-1 font-mono">
                     {r.toVpa}
@@ -62,7 +62,7 @@ export function TxnTape({ showLabels }: { showLabels: boolean }) {
                   <td className="px-3 py-1">
                     <Score value={r.gnn} />
                   </td>
-                  {showLabels && <td className="px-3 py-1 font-mono text-[11.5px] text-muted-foreground">{r.label.isFraud ? r.label.layer : 'clean'}</td>}
+                  {showLabels && <td className="px-3 py-1 font-mono text-[11.5px] text-muted-foreground">{rowLabel(r)}</td>}
                 </tr>
               )
             })}

@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 from pathlib import Path
 
 import torch
@@ -52,6 +53,9 @@ def main() -> None:
 
     with open(SCRIPT_DIR / "data_config.json", "r") as f:
         data_config = json.load(f)
+    # infra/feedback.py retrains on a copy of the data with analyst labels applied.
+    if os.getenv("NOLAMBUR_TRAIN_CSV"):
+        data_config["paths"]["aml_data"] = os.environ["NOLAMBUR_TRAIN_CSV"]
 
     logger_setup()
     set_seed(args.seed)
