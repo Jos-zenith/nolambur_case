@@ -658,6 +658,6 @@ if __name__ == "__main__":
     uvicorn.run(
         "bridge_api:app",
         host=os.getenv("GNN_HOST", "0.0.0.0"),
-        port=int(os.getenv("GNN_PORT", "8001")),
+        port=int(os.getenv("GNN_PORT", os.getenv("PORT", "8001"))),
         reload=os.getenv("GNN_RELOAD", "false").lower() in {"1", "true", "yes"},
     )

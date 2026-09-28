@@ -1,0 +1,30 @@
+services:
+  # Free web services share the workspace's monthly free instance-hour pool.
+  - type: web
+    name: vict
+    runtime: node
+    plan: free
+    buildCommand: npm install -g pnpm && pnpm install --frozen-lockfile && pnpm run build
+    startCommand: pnpm start
+    healthCheckPath: /
+    envVars:
+      - key: GNN_FASTAPI_URL
+        value: https://vict-bridge.onrender.com
+
+  - type: web
+    name: vict-bridge
+    runtime: python
+    rootDir: Multi-GNN
+    plan: free
+    buildCommand: pip install --no-cache-dir -r requirements-render.txt
+    startCommand: python bridge_api.py
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: GNN_HOST
+        value: 0.0.0.0
+      - key: GNN_KEEP_ALIVE_URL
+        value: https://vict-bridge.onrender.com/health
+
+# Add a separate UptimeRobot monitor for https://vict-bridge.onrender.com/health.

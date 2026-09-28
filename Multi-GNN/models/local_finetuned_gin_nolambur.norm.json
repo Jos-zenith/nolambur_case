@@ -1,0 +1,20 @@
+{
+  "edge_features": [
+    "Timestamp",
+    "Amount Received",
+    "Received Currency",
+    "Payment Format"
+  ],
+  "edge_attr_mean": [
+    129675.109375,
+    100982.1640625,
+    0.0,
+    0.0
+  ],
+  "edge_attr_std": [
+    76873.9609375,
+    61315.2890625,
+    0.0,
+    0.0
+  ]
+}
