@@ -9,6 +9,7 @@ import { useRail } from '@/lib/rail/store'
 import { BrainCircuit } from 'lucide-react'
 import { PageHeader, Term } from '@/components/rail/kit'
 import { WakeBanner } from '@/components/rail/BackendGate'
+import { DataHonesty } from '@/components/rail/overview'
 
 type PRF = { tp: number; fp: number; fn: number; precision: number; recall: number; f1: number }
 type Evaluation = {
@@ -185,6 +186,8 @@ export default function ModelPage() {
               )}
             </div>
           </Section>
+
+          <DataHonesty />
 
           <Section title="Why these numbers are high, and what they do not show">
             <ul className="grid max-w-3xl list-disc gap-1.5 pl-5 text-[13.5px] leading-relaxed">

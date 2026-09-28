@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { create } from 'zustand'
 
+import { BUNDLED_SNAPSHOT } from './snapshot'
 import type { Alert, AuditEntry, Case, DatasetFacts, Metrics, RailSnapshotFile, Roles, RoleName, Row, Snapshot, StreamEvent } from './types'
 
 export type BackendState = 'connecting' | 'live' | 'warming' | 'offline' | 'error'
@@ -39,7 +40,7 @@ export const useRail = create<RailState>(set => ({
   backend: 'connecting',
   backendError: null,
   waitingSince: null,
-  snapshot: null,
+  snapshot: BUNDLED_SNAPSHOT,
   paused: false,
   metrics: null,
   dataset: null,
@@ -135,10 +136,6 @@ export function useRailStream() {
   useEffect(() => {
     const { setBackend, load, apply } = useRail.getState()
     useRail.setState(s => ({ waitingSince: s.waitingSince ?? Date.now() }))
-    fetch('/rail-snapshot.json', { cache: 'force-cache' })
-      .then(r => (r.ok ? r.json() : null))
-      .then(snapshot => snapshot && useRail.setState({ snapshot }))
-      .catch(() => {})
     let source: EventSource | null = null
     let retry: ReturnType<typeof setTimeout> | undefined
     let closed = false

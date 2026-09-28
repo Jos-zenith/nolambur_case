@@ -1,10 +1,11 @@
 'use client'
 
-import { Activity, ArrowRight, BookOpen, Briefcase, ListChecks, ScanSearch, CheckCircle2, CircleDashed, FlaskConical, GitFork, Hourglass, Network, ScanEye, ShieldAlert, ShieldCheck, Zap } from 'lucide-react'
+import { Activity, ArrowRight, BookOpen, Briefcase, ListChecks, ScanSearch, CheckCircle2, CircleDashed, FlaskConical, History, Scale, Users, GitFork, Hourglass, Network, ScanEye, ShieldAlert, ShieldCheck, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 
 import { clock, duration, inr, inrShort, pct } from '@/lib/rail/format'
+import { capturedLabel } from '@/lib/rail/snapshot'
 import { useDisplayMetrics, useRail } from '@/lib/rail/store'
 import type { Detector } from '@/lib/rail/types'
 import { cn } from '@/lib/utils'
@@ -18,19 +19,27 @@ type Evaluation = {
   dataset: { rows: number; accounts: number; fraudRows: number }
 }
 
-/** /rail/evaluation once the bridge is live; until then the snapshot's copy of it. */
-export function useEvaluation() {
+/**
+ * /rail/evaluation from the running bridge once it answers; until then the pre-run's copy, which
+ * is in the page from the first render. Both come from the same full replay with nobody acting.
+ */
+export function useEvaluationState() {
   const backend = useRail(s => s.backend)
   const snapshot = useRail(s => s.snapshot)
-  const [ev, setEv] = useState<Evaluation | null>(null)
+  const [live, setLive] = useState<Evaluation | null>(null)
   useEffect(() => {
-    if (ev || backend !== 'live') return
+    if (live || backend !== 'live') return
     fetch('/api/rail/evaluation', { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : null))
-      .then(setEv)
+      .then(setLive)
       .catch(() => {})
-  }, [backend, ev])
-  return ev ?? ((snapshot?.evaluation as Evaluation | undefined) ?? null)
+  }, [backend, live])
+  const pre = (snapshot?.evaluation as Evaluation | undefined) ?? null
+  return { ev: live ?? pre, live: !!live, capturedAt: snapshot?.capturedAt ?? null }
+}
+
+export function useEvaluation() {
+  return useEvaluationState().ev
 }
 
 // ---------------------------------------------------------------------------- hero
@@ -44,9 +53,16 @@ export function Hero() {
           <h1 className="mt-3 max-w-2xl text-[30px] font-semibold leading-[1.2] tracking-tight md:text-[34px]">
             Freeze the mule before the money moves on.
           </h1>
+          <p className="mt-3 flex max-w-xl items-start gap-2 rounded-md bg-white/[0.08] px-3 py-2 text-[13.5px] leading-snug text-white/90">
+            <Users className="mt-0.5 size-4 shrink-0 text-white/70" />
+            <span>
+              <b className="font-semibold">Built for fraud-operations analysts at a payment aggregator:</b>{' '}the people who decide, within minutes, whether to stop
+              an account&apos;s money.
+            </span>
+          </p>
           <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-white/75">
-            Scam money lands in a first account and is forwarded within minutes. This console watches every UPI payment with a graph neural network and four
-            rules, and raises the alarm while the money is still in the first account.
+            In a scam, the victim&apos;s money lands in a stranger&apos;s account and is passed on within minutes. This console checks every UPI payment as it
+            arrives, and raises the alarm while the money is still in that first account.
           </p>
           <div className="mt-6 flex flex-wrap gap-2">
             <Link href="/console" className="group inline-flex h-10 items-center gap-2 rounded-[5px] bg-white px-4 text-[13.5px] font-medium text-brand-1 hover:bg-white/90">
@@ -347,7 +363,7 @@ export function MuleChainExplainer() {
 // ---------------------------------------------------------------------------- proof points
 
 export function ProofPoints() {
-  const ev = useEvaluation()
+  const { ev, live, capturedAt } = useEvaluationState()
   const cards = ev
     ? [
         {
@@ -386,9 +402,24 @@ export function ProofPoints() {
     : []
   return (
     <section className="grid gap-4">
-      <SectionTitle icon={FlaskConical} eyebrow="Measured, not claimed" title="What the engine achieves on the full dataset">
-        The bridge replays all {ev ? ev.dataset.rows.toLocaleString('en-IN') : '30,353'} transactions at start-up with nobody acting and scores the detectors against the
-        labels. Details on the <Link href="/model" className="text-brand-2 underline underline-offset-2">model page</Link>.
+      <SectionTitle
+        icon={FlaskConical}
+        eyebrow="Measured, not claimed"
+        title="What the engine achieves on the full dataset"
+        right={
+          ev && (
+            <span
+              className={cn('inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[12px]', live ? 'border-ok/30 bg-ok-bg text-ok' : 'bg-card text-muted-foreground')}
+              title="The bridge computes these at start-up by replaying every row with nobody acting. The pre-run is the same computation, saved."
+            >
+              {live ? <CheckCircle2 className="size-3.5" /> : <History className="size-3.5" />}
+              {live ? 'Live: computed by the running bridge' : capturedAt ? `Pre-run, captured ${capturedLabel(capturedAt)}` : 'Pre-run'}
+            </span>
+          )
+        }
+      >
+        The bridge replays all {ev ? ev.dataset.rows.toLocaleString('en-IN') : '30,353'} transactions with nobody acting and scores the detectors against the labels. Read
+        these with the note on the data just below. Details on the <Link href="/model" className="text-brand-2 underline underline-offset-2">model page</Link>.
       </SectionTitle>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {!ev
@@ -408,12 +439,7 @@ export function ProofPoints() {
               ) : null,
             )}
       </div>
-      {ev && (
-        <p className="text-[12px] text-muted-foreground">
-          Caveat: the data is synthetic and easy to separate (victims' transfers are ₹5–5.5 lakh, clean ones stay under ₹2 lakh), so these are pipeline numbers, not a
-          claim about real traffic.
-        </p>
-      )}
+
     </section>
   )
 }
@@ -598,6 +624,8 @@ export function OverviewPage() {
 
       <ProofPoints />
 
+      <DataHonesty />
+
       <DetectorCards />
 
       <section className="grid gap-4">
@@ -628,5 +656,105 @@ export function OverviewPage() {
         transactions come from the synthetic Nolambur dataset.
       </footer>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------- how the data was made
+
+/**
+ * The skeptic's question, answered before it is asked. Generator facts are from
+ * Multi-GNN/nolambur_synthetic_gen.py (seed 42); counts come from the evaluation.
+ */
+export function DataHonesty() {
+  const ev = useEvaluation()
+  const fraudRows = ev?.dataset.fraudRows ?? 353
+  const rows = ev?.dataset.rows ?? 30353
+  const checks: { ok: boolean; title: string; body: React.ReactNode }[] = [
+    {
+      ok: true,
+      title: 'No detector reads a label',
+      body: (
+        <>
+          The four rules, the auto-hold and the GNN see only what a payment processor sees. The GNN&apos;s inputs are time, amount, currency and payment format: no
+          states, no roles. Labels are used only afterwards, to score them.
+        </>
+      ),
+    },
+    {
+      ok: false,
+      title: 'But the rules were written knowing the recipe',
+      body: (
+        <>
+          The ₹4.5 lakh threshold sits in the empty gap between clean payments (at most ₹2 lakh) and scam payments (at least ₹5 lakh), and the mules live in states
+          no clean account uses. On this data the rules are fitted to the answer. That is why precision is so high.
+        </>
+      ),
+    },
+    {
+      ok: false,
+      title: 'The registry lookup is an oracle',
+      body: 'The mock NPCI registry answers from the label. It appears only in the investigation panel; no detector, hold or metric uses it.',
+    },
+    {
+      ok: false,
+      title: 'The model is tested on the same event',
+      body: 'Training and test edges are random picks from the same five-minute incident, so the GNN\'s F1 of 1.00 measures fit, not how it would do on a new scam.',
+    },
+  ]
+
+  return (
+    <section className="grid gap-4">
+      <SectionTitle icon={Scale} eyebrow="Read this before the numbers" title="Where the data comes from, and why the numbers aren't circular">
+        Every account and payment here is synthetic. This is exactly how it was made, and what that means for the figures above.
+      </SectionTitle>
+      <div className="grid gap-3 lg:grid-cols-[1fr_1.35fr]">
+        <div className="rounded-lg border bg-card p-4 shadow-card">
+          <p className="text-[13.5px] font-semibold">How the dataset was generated</p>
+          <p className="text-[11.5px] text-muted-foreground">
+            <code className="font-mono">Multi-GNN/nolambur_synthetic_gen.py</code>, fixed random seed, modelled on the Nolambur &ldquo;digital arrest&rdquo; case
+          </p>
+          <ol className="mt-3 grid gap-2.5 text-[13px] leading-relaxed">
+            <li className="grid grid-cols-[22px_1fr] gap-2">
+              <span className="grid size-5 place-items-center rounded-full bg-sev-critical-bg text-[11px] font-semibold text-sev-critical">1</span>
+              <span>
+                <b>50 victims</b> in Tamil Nadu each pay 1–2 of <b>80 first-layer mules</b> in Uttarakhand or Rajasthan: <b>₹5–5.5 lakh</b>, all within 3 minutes of
+                10:30 on 15 March 2024.
+              </span>
+            </li>
+            <li className="grid grid-cols-[22px_1fr] gap-2">
+              <span className="grid size-5 place-items-center rounded-full bg-sev-critical-bg text-[11px] font-semibold text-sev-critical">2</span>
+              <span>
+                Each mule forwards <b>₹80,000–2 lakh</b> to 2–5 of <b>300 second-layer mules</b>, 10–90 seconds after that burst ends.
+              </span>
+            </li>
+            <li className="grid grid-cols-[22px_1fr] gap-2">
+              <span className="grid size-5 place-items-center rounded-full bg-muted text-[11px] font-semibold">3</span>
+              <span>
+                Clean traffic: <b>30,000 payments</b> among 3,000 accounts in seven states, none of them where the mules are, <b>₹500–2 lakh</b>, spread over 72 hours.
+              </span>
+            </li>
+          </ol>
+          <p className="mt-3 border-t pt-2 text-[12px] text-muted-foreground">
+            {fraudRows} scam rows in {rows.toLocaleString('en-IN')} ({((fraudRows / rows) * 100).toFixed(1)}%).
+          </p>
+        </div>
+        <ul className="grid gap-2">
+          {checks.map(c => (
+            <li key={c.title} className="grid grid-cols-[24px_1fr] gap-2 rounded-lg border bg-card p-3 shadow-card">
+              {c.ok ? <CheckCircle2 className="mt-0.5 size-4 text-ok" /> : <ShieldAlert className="mt-0.5 size-4 text-sev-medium" />}
+              <div>
+                <p className="text-[13.5px] font-medium">{c.title}</p>
+                <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">{c.body}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="rounded-lg border border-sev-medium/30 bg-sev-medium-bg/60 p-3.5 text-[13px] leading-relaxed">
+        <b>On real traffic, precision will be much lower.</b> Real scams vary their amounts, genuine ₹5 lakh payments happen, and mule accounts are aged and spread
+        their transfers out. What this project demonstrates is the pipeline: streaming, graph scoring, holds, audit and the analyst feedback loop. The thresholds would
+        have to be re-learned from real, labelled cases, which is the job the feedback loop is built for.
+      </div>
+    </section>
   )
 }

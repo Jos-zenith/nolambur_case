@@ -3,6 +3,7 @@
 import { CircleDashed, History, PlugZap } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { capturedLabel } from '@/lib/rail/snapshot'
 import { useRail } from '@/lib/rail/store'
 
 /** Seconds since the page started waiting for the bridge; ticks once a second while waiting. */
@@ -31,7 +32,7 @@ export function WakeBanner() {
   const snapshot = useRail(s => s.snapshot)
   const seconds = useWaitSeconds()
   if (backend === 'live') return null
-  const captured = snapshot ? new Date(snapshot.capturedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : null
+  const captured = snapshot ? capturedLabel(snapshot.capturedAt) : null
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-sev-medium/30 bg-sev-medium-bg/60 px-3 py-2 text-[12.5px]">
       <span className="flex items-center gap-1.5 font-medium">
