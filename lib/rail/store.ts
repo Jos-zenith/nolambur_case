@@ -3,13 +3,17 @@
 import { useEffect } from 'react'
 import { create } from 'zustand'
 
-import type { Alert, AuditEntry, Case, DatasetFacts, Metrics, Roles, RoleName, Row, Snapshot, StreamEvent } from './types'
+import type { Alert, AuditEntry, Case, DatasetFacts, Metrics, RailSnapshotFile, Roles, RoleName, Row, Snapshot, StreamEvent } from './types'
 
 export type BackendState = 'connecting' | 'live' | 'warming' | 'offline' | 'error'
 
 interface RailState {
   backend: BackendState
   backendError: string | null
+  /** when the page started waiting for the bridge (ms), null once it is live */
+  waitingSince: number | null
+  /** last-known numbers from public/rail-snapshot.json, shown only while the bridge is not live */
+  snapshot: RailSnapshotFile | null
   paused: boolean
   metrics: Metrics | null
   dataset: DatasetFacts | null
@@ -34,6 +38,8 @@ interface RailState {
 export const useRail = create<RailState>(set => ({
   backend: 'connecting',
   backendError: null,
+  waitingSince: null,
+  snapshot: null,
   paused: false,
   metrics: null,
   dataset: null,
@@ -61,11 +67,13 @@ export const useRail = create<RailState>(set => ({
       const known = (a: string | null) => !!a && roles.users.some(u => u.actor === a)
       return { roles, actor: known(state.actor) ? state.actor : known(saved) ? saved : roles.users[0]?.actor ?? null }
     }),
-  setBackend: (backend, backendError = null) => set({ backend, backendError }),
+  setBackend: (backend, backendError = null) =>
+    set(s => ({ backend, backendError, waitingSince: backend === 'live' ? null : (s.waitingSince ?? Date.now()) })),
   setPaused: paused => set({ paused }),
   load: s =>
     set({
       backend: 'live',
+      waitingSince: null,
       paused: s.paused,
       metrics: s.metrics,
       dataset: s.dataset,
@@ -126,6 +134,11 @@ export function sortAlerts(alerts: Alert[]) {
 export function useRailStream() {
   useEffect(() => {
     const { setBackend, load, apply } = useRail.getState()
+    useRail.setState(s => ({ waitingSince: s.waitingSince ?? Date.now() }))
+    fetch('/rail-snapshot.json', { cache: 'force-cache' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(snapshot => snapshot && useRail.setState({ snapshot }))
+      .catch(() => {})
     let source: EventSource | null = null
     let retry: ReturnType<typeof setTimeout> | undefined
     let closed = false
@@ -185,6 +198,15 @@ export async function railPost<T = unknown>(path: string, body?: unknown): Promi
   // FastAPI puts refusals (401 / 403 / 409) in `detail`; surface them as `error`
   if (!res.ok && !data.error && typeof data.detail === 'string') data.error = data.detail
   return { ok: res.ok, data }
+}
+
+/** Live metrics when the bridge streams; otherwise the captured snapshot, flagged as such. */
+export function useDisplayMetrics() {
+  const live = useRail(s => (s.backend === 'live' ? s.metrics : null))
+  const snapshot = useRail(s => s.snapshot)
+  if (live) return { metrics: live, stale: false as const, capturedAt: null }
+  if (snapshot) return { metrics: snapshot.metrics, stale: true as const, capturedAt: snapshot.capturedAt }
+  return { metrics: null, stale: false as const, capturedAt: null }
 }
 
 export function useRoles() {

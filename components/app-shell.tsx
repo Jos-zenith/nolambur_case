@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 import { clock } from '@/lib/rail/format'
+import { useWaitSeconds } from '@/components/rail/BackendGate'
 import { useRail, useRailStream, useRoles } from '@/lib/rail/store'
 import { cn } from '@/lib/utils'
 
@@ -86,8 +87,11 @@ function BackendStatus() {
   const m = useRail(s => s.metrics)
   const paused = useRail(s => s.paused)
 
-  const dot = backend === 'live' ? 'text-ok' : backend === 'warming' || backend === 'connecting' ? 'text-sev-medium' : 'text-sev-critical'
-  const label = { live: 'Bridge live', warming: 'Bridge warming up', connecting: 'Connecting', offline: 'Bridge offline', error: 'Bridge error' }[backend]
+  // A free Render bridge answers nothing while it wakes, so "offline" only means offline after 90 s.
+  const seconds = useWaitSeconds()
+  const waking = backend === 'connecting' || (backend === 'offline' && seconds < 90)
+  const dot = backend === 'live' ? 'text-ok' : backend === 'warming' || waking ? 'text-sev-medium' : 'text-sev-critical'
+  const label = backend === 'offline' && waking ? 'Waking bridge' : { live: 'Bridge live', warming: 'Bridge warming up', connecting: 'Connecting', offline: 'Bridge offline', error: 'Bridge error' }[backend]
 
   return (
     <div className="hidden items-center gap-4 text-[12px] text-muted-foreground lg:flex">

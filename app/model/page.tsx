@@ -8,6 +8,7 @@ import { duration, inr, pct } from '@/lib/rail/format'
 import { useRail } from '@/lib/rail/store'
 import { BrainCircuit } from 'lucide-react'
 import { PageHeader, Term } from '@/components/rail/kit'
+import { WakeBanner } from '@/components/rail/BackendGate'
 
 type PRF = { tp: number; fp: number; fn: number; precision: number; recall: number; f1: number }
 type Evaluation = {
@@ -60,16 +61,20 @@ const PIPELINE = [
 ]
 
 export default function ModelPage() {
-  const [ev, setEv] = useState<Evaluation | null>(null)
+  const [liveEv, setEv] = useState<Evaluation | null>(null)
   const [error, setError] = useState<string | null>(null)
   const backend = useRail(s => s.backend)
+  const snapshot = useRail(s => s.snapshot)
+  // Until the bridge answers, the evaluation it reported when the snapshot was captured.
+  const ev = liveEv ?? ((snapshot?.evaluation as Evaluation | undefined) ?? null)
+  const fromSnapshot = !liveEv && !!ev
 
   useEffect(() => {
-    if (ev) return
+    if (liveEv) return
     fetch('/api/rail/evaluation', { cache: 'no-store' })
       .then(async r => (r.ok ? setEv(await r.json()) : setError(r.status === 503 ? 'The bridge is still warming up.' : 'The GNN bridge is not running.')))
       .catch(() => setError('The GNN bridge is not running.'))
-  }, [backend, ev])
+  }, [backend, liveEv])
 
   return (
     <div className="grid max-w-5xl gap-8">
@@ -88,6 +93,10 @@ export default function ModelPage() {
         Every number here is computed by the bridge from the files in <code className="font-mono">Multi-GNN/</code> when it starts. Nothing is typed in by hand.
       </PageHeader>
 
+      {fromSnapshot && <WakeBanner />}
+
+      {ev && <Headline ev={ev} />}
+
       <Section title="Pipeline">
         <ol className="grid gap-px border bg-border sm:grid-cols-2 lg:grid-cols-4">
           {PIPELINE.map(([file, what], i) => (
@@ -101,7 +110,7 @@ export default function ModelPage() {
       </Section>
 
       {!ev ? (
-        <p className="border bg-card p-4 text-[13px] text-muted-foreground">{error ?? 'Loading evaluation from the bridge…'}</p>
+        <p className="border bg-card p-4 text-[13px] text-muted-foreground">{error ? `${error} The page keeps retrying.` : 'Loading evaluation from the bridge…'}</p>
       ) : (
         <>
           <Section title="Detectors against the labels" note="account level · all 30,353 rows replayed with no analyst action">
@@ -262,5 +271,42 @@ export default function ModelPage() {
         </>
       )}
     </div>
+  )
+}
+
+/** Precision, recall and F1 up front, each with where it comes from. */
+function Headline({ ev }: { ev: Evaluation }) {
+  const t = ev.trainingLog.test
+  const cards: { title: string; where: string; p: number; r: number; f1: number; note: string }[] = [
+    { title: 'Rules only', where: 'account level, full replay', p: ev.detectors.accountLevel.precision, r: ev.detectors.accountLevel.recall, f1: ev.detectors.accountLevel.f1, note: `${ev.detectors.accountLevel.tp} of ${ev.detectors.mulesInTransactions} mules` },
+    { title: 'Rules + GNN leads', where: 'account level, full replay', p: ev.detectors.combined.precision, r: ev.detectors.combined.recall, f1: ev.detectors.combined.f1, note: `${ev.detectors.combined.tp} of ${ev.detectors.mulesInTransactions} mules` },
+    ...(t ? [{ title: 'GNN, held-out test edges', where: 'edge level, random stratified split', p: t.precision, r: t.recall, f1: t.f1, note: `${t.flagged} flagged of ${t.edges.toLocaleString('en-IN')} edges, ${t.positives} fraud` }] : []),
+  ]
+  return (
+    <section className="grid gap-3 sm:grid-cols-3">
+      {cards.map(c => (
+        <div key={c.title} className="rounded-lg border bg-card p-4 shadow-card">
+          <p className="text-[13.5px] font-semibold">{c.title}</p>
+          <p className="text-[11.5px] text-muted-foreground">{c.where}</p>
+          <dl className="mt-3 grid grid-cols-3 gap-2">
+            {[
+              ['Precision', pct(c.p)],
+              ['Recall', pct(c.r)],
+              ['F1', c.f1.toFixed(2)],
+            ].map(([k, v]) => (
+              <div key={k}>
+                <dt className="text-[11.5px] text-muted-foreground">{k}</dt>
+                <dd className="figure text-[22px] font-semibold leading-tight">{v}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-2 text-[11.5px] text-muted-foreground">{c.note}</p>
+        </div>
+      ))}
+      <p className="text-[12px] text-muted-foreground sm:col-span-3">
+        Synthetic data that is easy to separate (victims&apos; transfers are ₹5–5.5 lakh, clean ones stay under ₹2 lakh), so read these as pipeline checks,
+        not a claim about real traffic. The caveats section below says why.
+      </p>
+    </section>
   )
 }

@@ -261,6 +261,15 @@ export type StreamEvent =
   | { type: 'held'; accountId: string; vpa: string; alertId: string }
   | { type: 'released'; accountId: string; vpa: string }
 
+/** public/rail-snapshot.json: what a real bridge reported, captured by scripts/capture-rail-snapshot.mjs */
+export interface RailSnapshotFile {
+  capturedAt: string
+  capturedFrom: string
+  metrics: Metrics
+  dataset: DatasetFacts
+  evaluation: Record<string, unknown>
+}
+
 export interface Roles {
   users: { actor: string; role: RoleName }[]
   permissions: Record<RoleName, string[]>

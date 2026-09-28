@@ -1033,10 +1033,20 @@ def _prf(tp: int, fp: int, fn: int) -> dict[str, float]:
     return {"tp": tp, "fp": fp, "fn": fn, "precision": p, "recall": r, "f1": 2 * p * r / (p + r) if p + r else 0.0}
 
 
+TRAINING_METRICS = SCRIPT_DIR / "models" / "local_finetuned_gin_nolambur.metrics.json"
+
+
 def _training_log() -> dict[str, Any]:
-    """The last finetune run in logs/logs.log: per-epoch F1 and the held-out test result."""
+    """The last finetune run: per-epoch F1 and the held-out test result.
+
+    Read from logs/logs.log when it exists (local runs). A deployed bridge has no logs/
+    (it is gitignored), so it falls back to the metrics file saved next to the checkpoint,
+    which `python rail_engine.py --save-training-metrics` writes from the log.
+    """
     path = SCRIPT_DIR / "logs" / "logs.log"
     if not path.exists():
+        if TRAINING_METRICS.exists():
+            return {**json.loads(TRAINING_METRICS.read_text(encoding="utf-8")), "source": TRAINING_METRICS.name}
         return {"epochs": [], "test": None}
     lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
     epoch_re = re.compile(r"\[FINETUNE\] Epoch\s+(\d+) \| Train F1: ([\d.]+) \| Val F1: ([\d.]+) \| Test F1: ([\d.]+)")
@@ -1055,7 +1065,7 @@ def _training_log() -> dict[str, Any]:
         t = test_re.search(line)
         if t:
             test = {"edges": int(t.group(1)), "positives": int(t.group(2)), "flagged": int(t.group(3)), "f1": float(t.group(4)), "precision": float(t.group(5)), "recall": float(t.group(6)), "loggedAt": line[:19]}
-    return {"epochs": runs[-1] if runs else [], "test": test, "lastEpochAt": stamp, "runsInLog": len(runs)}
+    return {"epochs": runs[-1] if runs else [], "test": test, "lastEpochAt": stamp, "runsInLog": len(runs), "source": "logs/logs.log"}
 
 
 def evaluate(data: Dataset) -> dict[str, Any]:
@@ -1569,3 +1579,16 @@ def mount(app, load: Callable[[], tuple[pd.DataFrame, Any]], predict_chain: Call
     app.include_router(router)
     app.include_router(sandbox.router())
     return service
+
+
+if __name__ == "__main__":
+    import sys
+
+    if "--save-training-metrics" not in sys.argv:
+        sys.exit("usage: python rail_engine.py --save-training-metrics   (writes models/*.metrics.json from logs/logs.log)")
+    metrics = _training_log()
+    if not metrics.get("test"):
+        sys.exit("logs/logs.log has no finished finetune run; train first")
+    metrics.pop("source", None)
+    TRAINING_METRICS.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    print(f"wrote {TRAINING_METRICS.relative_to(SCRIPT_DIR)}: test F1={metrics['test']['f1']}, {len(metrics['epochs'])} epochs")

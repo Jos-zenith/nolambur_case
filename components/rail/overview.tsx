@@ -5,10 +5,10 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 
 import { clock, duration, inr, inrShort, pct } from '@/lib/rail/format'
-import { useRail } from '@/lib/rail/store'
+import { useDisplayMetrics, useRail } from '@/lib/rail/store'
 import type { Detector } from '@/lib/rail/types'
 import { cn } from '@/lib/utils'
-import { BackendGate } from './BackendGate'
+import { BackendGate, useWaitSeconds } from './BackendGate'
 import { GLOSSARY, Term, useCountUp, type TermKey } from './kit'
 import { MetricStrip } from './MetricStrip'
 
@@ -18,9 +18,10 @@ type Evaluation = {
   dataset: { rows: number; accounts: number; fraudRows: number }
 }
 
-/** /rail/evaluation, fetched once the bridge is live. */
+/** /rail/evaluation once the bridge is live; until then the snapshot's copy of it. */
 export function useEvaluation() {
   const backend = useRail(s => s.backend)
+  const snapshot = useRail(s => s.snapshot)
   const [ev, setEv] = useState<Evaluation | null>(null)
   useEffect(() => {
     if (ev || backend !== 'live') return
@@ -29,7 +30,7 @@ export function useEvaluation() {
       .then(setEv)
       .catch(() => {})
   }, [backend, ev])
-  return ev
+  return ev ?? ((snapshot?.evaluation as Evaluation | undefined) ?? null)
 }
 
 // ---------------------------------------------------------------------------- hero
@@ -64,12 +65,13 @@ export function Hero() {
 
 /** The page's one hero figure: fraud money blocked, live from the engine. */
 function HeroLive() {
-  const m = useRail(s => s.metrics)
+  const { metrics: m, stale, capturedAt } = useDisplayMetrics()
   const backend = useRail(s => s.backend)
   const paused = useRail(s => s.paused)
+  const seconds = useWaitSeconds()
   const blocked = useCountUp(m?.blockedFraudAmount ?? 0, 900)
 
-  if (!m || backend !== 'live') {
+  if (!m) {
     return (
       <div className="rounded-md border border-white/15 bg-white/[0.06] p-5">
         <p className="flex items-center gap-2 text-[13px] text-white/80">
@@ -85,10 +87,17 @@ function HeroLive() {
   return (
     <div className="rounded-md border border-white/15 bg-white/[0.06] p-5">
       <div className="flex items-center justify-between text-[12px] text-white/70">
-        <span className="flex items-center gap-2">
-          <span className="size-1.5 rounded-full bg-[#6fd49a]" />
-          {m.rowsTotal === null ? `Live stream · ${m.source}` : paused ? 'Replay paused' : m.done ? 'Replay finished' : `Replaying at ${m.speed}×`}
-        </span>
+        {stale ? (
+          <span className="flex items-center gap-2" title={`Captured ${capturedAt}`}>
+            <CircleDashed className="size-3.5 animate-spin text-[#f5c26b]" />
+            Snapshot · {backend === 'warming' ? 'bridge warming up' : `waking bridge (${seconds}s)`}
+          </span>
+        ) : (
+          <span className="flex items-center gap-2">
+            <span className="size-1.5 rounded-full bg-[#6fd49a]" />
+            {m.rowsTotal === null ? `Live stream · ${m.source}` : paused ? 'Replay paused' : m.done ? 'Replay finished' : `Replaying at ${m.speed}×`}
+          </span>
+        )}
         <span className="font-mono">{clock(m.simT)}</span>
       </div>
       <p className="mt-4 text-[12.5px] text-white/70">Fraud money blocked</p>
@@ -210,7 +219,7 @@ export function MuleChainExplainer() {
   return (
     <section id="how-it-works" className="scroll-mt-20 grid gap-4">
       <SectionTitle icon={BookOpen} eyebrow="The 5-minute scam" title="How a mule chain moves money, and where we catch it">
-        Hover a step to see where it happens. This is an illustration of the pattern; every number elsewhere on the page comes from the engine.
+        Hover or tap a step to see where it happens. This is an illustration of the pattern; every number elsewhere on the page comes from the engine.
       </SectionTitle>
       <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
         <div className="relative overflow-hidden rounded-xl border bg-card p-3 shadow-card">
@@ -578,9 +587,9 @@ export function OverviewPage() {
             </Link>
           }
         >
-          Hover the (i) on any tile for what it measures.
+          Hover or tap the (i) on any tile for what it measures.
         </SectionTitle>
-        <BackendGate>
+        <BackendGate allowSnapshot>
           <MetricStrip />
         </BackendGate>
       </section>

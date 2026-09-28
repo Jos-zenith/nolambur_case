@@ -20,6 +20,7 @@ venv/
 Multi-GNN/models/*
 !Multi-GNN/models/local_finetuned_gin_nolambur.pt
 !Multi-GNN/models/local_finetuned_gin_nolambur.norm.json
+!Multi-GNN/models/local_finetuned_gin_nolambur.metrics.json
 Multi-GNN/data/
 Multi-GNN/logs/
 Multi-GNN/wandb/

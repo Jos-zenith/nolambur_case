@@ -3,7 +3,7 @@
 import { ChevronDown, Info, Lightbulb, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------- glossary
@@ -33,31 +33,84 @@ export const GLOSSARY = {
 
 export type TermKey = keyof typeof GLOSSARY
 
-/** A word with a dotted underline that explains itself on hover. */
-export function Term({ k, children }: { k: TermKey; children?: React.ReactNode }) {
+/**
+ * An explanation that opens on hover with a mouse and on tap with a finger (touch screens have no
+ * hover). A mouse click pins it open; tapping outside or pressing Escape closes it.
+ */
+function Explain({ trigger, children, maxWidth = 280 }: { trigger: React.ReactElement; children: React.ReactNode; maxWidth?: number }) {
+  const [open, setOpen] = useState(false)
+  const pointer = useRef<string>('mouse')
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const hoverOpen = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'mouse') return
+    clearTimeout(closeTimer.current)
+    setOpen(true)
+  }
+  const hoverClose = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'mouse') return
+    closeTimer.current = setTimeout(() => setOpen(false), 120)
+  }
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span tabIndex={0} className="dotted-term">
-          {children ?? k}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent className="max-w-[280px] text-[12.5px] leading-snug">{GLOSSARY[k]}</TooltipContent>
-    </Tooltip>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        asChild
+        onPointerDown={e => (pointer.current = e.pointerType)}
+        onPointerEnter={hoverOpen}
+        onPointerLeave={hoverClose}
+        onClick={e => {
+          // Hover already opened it for a mouse, so a click keeps it open instead of toggling it shut.
+          if (pointer.current === 'mouse' && open) e.preventDefault()
+        }}
+      >
+        {trigger}
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        onOpenAutoFocus={e => e.preventDefault()}
+        onPointerEnter={hoverOpen}
+        onPointerLeave={hoverClose}
+        className="w-auto p-2.5 text-[12.5px] leading-snug"
+        style={{ maxWidth }}
+      >
+        {children}
+      </PopoverContent>
+    </Popover>
   )
 }
 
-/** A small (i) that explains the thing next to it. */
+/** A word with a dotted underline that explains itself on hover or tap. */
+export function Term({ k, children }: { k: TermKey; children?: React.ReactNode }) {
+  return (
+    <Explain
+      trigger={
+        <button type="button" className="dotted-term inline p-0 text-left align-baseline [font:inherit]">
+          {children ?? k}
+        </button>
+      }
+    >
+      {GLOSSARY[k]}
+    </Explain>
+  )
+}
+
+/** A small (i) that explains the thing next to it, on hover or tap. */
 export function InfoTip({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button type="button" aria-label="What is this?" className={cn('inline-grid size-4 place-items-center rounded-full text-muted-foreground hover:text-brand-2', className)}>
+    <Explain
+      maxWidth={300}
+      trigger={
+        <button
+          type="button"
+          aria-label="What is this?"
+          // 28px hit area on touch without changing the icon's size
+          className={cn('relative inline-grid size-4 place-items-center rounded-full text-muted-foreground before:absolute before:-inset-1.5 hover:text-brand-2', className)}
+        >
           <Info className="size-3.5" />
         </button>
-      </TooltipTrigger>
-      <TooltipContent className="max-w-[300px] text-[12.5px] leading-snug">{children}</TooltipContent>
-    </Tooltip>
+      }
+    >
+      {children}
+    </Explain>
   )
 }
 
@@ -214,7 +267,7 @@ export function StatTile({
         <span className={cn('grid size-7 shrink-0 place-items-center rounded-md', t.icon)}>
           <Icon className="size-4" />
         </span>
-        <p className="min-w-0 flex-1 truncate text-[12.5px] text-muted-foreground" title={label}>
+        <p className="line-clamp-2 min-w-0 flex-1 text-[12.5px] leading-tight text-muted-foreground" title={label}>
           {label}
         </p>
         {help && <InfoTip className="shrink-0">{help}</InfoTip>}

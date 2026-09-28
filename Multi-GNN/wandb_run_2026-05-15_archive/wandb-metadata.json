@@ -1,0 +1,48 @@
+{
+  "os":  "Linux-6.6.122+-x86_64-with-glibc2.35",
+  "python":  "CPython 3.12.13",
+  "startedAt":  "2026-05-15T13:04:01.505435Z",
+  "args":  [
+    "--data",
+    "HI-Small",
+    "--pretrain-epochs",
+    "5",
+    "--batch-size",
+    "512"
+  ],
+  "program":  "/content/nolambur_case/Multi-GNN/pretrain_finetune.py",
+  "codePath":  "Multi-GNN/pretrain_finetune.py",
+  "codePathLocal":  "pretrain_finetune.py",
+  "git":  {
+    "remote":  "https://github.com/Jos-zenith/nolambur_case.git",
+    "commit":  "5f0d090a518111a098d130e5d147466ab2ca9572"
+  },
+  "email":  "zenithjoshua.27it@licet.ac.in",
+  "root":  "/content/nolambur_case/Multi-GNN",
+  "host":  "035ff4658a7d",
+  "executable":  "/usr/bin/python3",
+  "cpu_count":  1,
+  "cpu_count_logical":  2,
+  "gpu":  "Tesla T4",
+  "gpu_count":  1,
+  "disk":  {
+    "/":  {
+      "total":  "120942624768",
+      "used":  "53767581696"
+    }
+  },
+  "memory":  {
+    "total":  "13605830656"
+  },
+  "gpu_nvidia":  [
+    {
+      "name":  "Tesla T4",
+      "memoryTotal":  "16106127360",
+      "cudaCores":  2560,
+      "architecture":  "Turing",
+      "uuid":  "GPU-d7ffa81e-8ee6-d1f6-6493-b4164d2d063b"
+    }
+  ],
+  "cudaVersion":  "13.0",
+  "writerId":  "eminyzjssdk0mqv1f8sk30yjqg2ty6ur"
+}

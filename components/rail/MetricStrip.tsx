@@ -3,12 +3,13 @@
 import { Activity, Radar, ShieldCheck, Siren, Target, Timer } from 'lucide-react'
 
 import { duration, inrShort } from '@/lib/rail/format'
-import { useRail } from '@/lib/rail/store'
+import { useDisplayMetrics, useRail } from '@/lib/rail/store'
 import { StatTile, Term } from './kit'
 
 export function MetricStrip() {
-  const m = useRail(s => s.metrics)
-  const ticks = useRail(s => s.tickCounts)
+  const { metrics: m, stale } = useDisplayMetrics()
+  const liveTicks = useRail(s => s.tickCounts)
+  const ticks = stale ? undefined : liveTicks
   if (!m) return null
 
   const stopped = m.frozenAccounts + m.heldAccounts
