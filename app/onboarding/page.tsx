@@ -109,7 +109,7 @@ export default function OnboardingPage() {
   const [vpas, setVpas] = useState('')
   const [cin, setCin] = useState('')
   const [dins, setDins] = useState('')
-  const [register, setRegister] = useState(true)
+  const [register, setRegister] = useState(false)
   const [reg, setReg] = useState<RegistryCounts | null>(null)
   const [presets, setPresets] = useState<{ label: string; vpas: string[] }[]>([])
   const [result, setResult] = useState<Result | null>(null)

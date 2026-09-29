@@ -45,6 +45,22 @@ from pathlib import Path
 MULTI_GNN_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = MULTI_GNN_DIR / "data"
 
+
+def _load_dotenv(path: Path) -> None:
+    """KEY=VALUE lines from Multi-GNN/.env (git-ignored) for local runs. Variables already
+    set in the environment win, so a host's settings (Render) are never overridden."""
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_dotenv(MULTI_GNN_DIR / ".env")
+
 # Same port resolution as bridge_api.py's uvicorn.run: GNN_PORT, else the host's PORT (Render sets it), else 8001.
 _PORT = os.getenv("GNN_PORT") or os.getenv("PORT") or "8001"
 BRIDGE_PUBLIC_URL = os.getenv("BRIDGE_PUBLIC_URL", f"http://127.0.0.1:{_PORT}").rstrip("/")
