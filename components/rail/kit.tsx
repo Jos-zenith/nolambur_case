@@ -117,6 +117,15 @@ export function InfoTip({ children, className }: { children: React.ReactNode; cl
 // ---------------------------------------------------------------------------- page header
 
 /** Title block for every page, with an optional "how to read this page" guide that remembers being closed. */
+/** One row of guide steps on wide screens, whatever their number: no empty cells. */
+const GUIDE_COLS: Record<number, string> = {
+  2: 'lg:[&>li:last-child:nth-child(odd)]:col-span-1',
+  3: 'lg:grid-cols-3 lg:[&>li:last-child:nth-child(odd)]:col-span-1',
+  4: 'lg:grid-cols-4 lg:[&>li:last-child:nth-child(odd)]:col-span-1',
+  5: 'lg:grid-cols-5 lg:[&>li:last-child:nth-child(odd)]:col-span-1',
+  6: 'lg:grid-cols-3 lg:[&>li:last-child:nth-child(odd)]:col-span-1',
+}
+
 export function PageHeader({
   icon: Icon,
   eyebrow,
@@ -135,10 +144,10 @@ export function PageHeader({
   right?: React.ReactNode
 }) {
   const storageKey = `rail.guide.${guideKey ?? String(title)}`
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   useEffect(() => {
     try {
-      if (localStorage.getItem(storageKey) === 'closed') setOpen(false)
+      if (localStorage.getItem(storageKey) === 'open') setOpen(true)
     } catch {}
   }, [storageKey])
   const toggle = () => {
@@ -169,13 +178,14 @@ export function PageHeader({
             <button onClick={toggle} className="flex h-8 items-center gap-1.5 rounded-md border bg-card px-2.5 text-[12.5px] hover:bg-accent" aria-expanded={open}>
               <Lightbulb className="size-3.5 text-muted-foreground" />
               How to read this
+              {!open && <span className="rounded-full bg-muted px-1.5 text-[11px] text-muted-foreground">{guide.length} steps</span>}
               <ChevronDown className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
             </button>
           )}
         </div>
       </div>
       {guide && open && (
-        <ol className="grid gap-px overflow-hidden rounded-lg border bg-border shadow-card sm:grid-cols-2 xl:grid-cols-4">
+        <ol className={cn('enter grid gap-px overflow-hidden rounded-lg border bg-border shadow-card sm:grid-cols-2 sm:[&>li:last-child:nth-child(odd)]:col-span-2', GUIDE_COLS[guide.length])}>
           {guide.map((g, i) => (
             <li key={g.title} className="bg-card p-3">
               <p className="flex items-center gap-2 text-[13px] font-medium">
