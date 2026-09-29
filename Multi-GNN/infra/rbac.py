@@ -8,7 +8,7 @@ verified session, never by the browser.
     analyst     clear, escalate, investigate, onboarding checks, replay speed / pause
     supervisor  + freeze, file 1930 reports, notify officers, and model overrides:
                 clearing an alert the model scored >= 0.9, or releasing an automatic hold
-    admin       + restart / reset the engine
+    admin       + restart / reset the engine, load MCA registry files
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ ROLES = ("analyst", "supervisor", "admin")
 PERMISSIONS: dict[str, set[str]] = {
     "analyst": {"clear", "escalate", "investigate", "onboarding", "control"},
     "supervisor": {"clear", "escalate", "investigate", "onboarding", "control", "freeze", "file_1930_report", "notify", "override"},
-    "admin": {"clear", "escalate", "investigate", "onboarding", "control", "freeze", "file_1930_report", "notify", "override", "restart"},
+    "admin": {"clear", "escalate", "investigate", "onboarding", "control", "freeze", "file_1930_report", "notify", "override", "restart", "registry_import"},
 }
 
 OVERRIDE_SCORE = 0.9

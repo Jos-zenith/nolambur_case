@@ -99,6 +99,13 @@ function StreamBar({ paused, busy, control, canRestart }: { paused: boolean; bus
         <span className="font-mono text-foreground">{m.ingested.toLocaleString('en-IN')}</span> payments this run · {perSec.toFixed(0)}/s ·{' '}
         {m.duplicatesDropped} duplicates dropped
       </span>
+      {m.ingested === 0 && (
+        <span className="basis-full text-muted-foreground">
+          Waiting for payments. Send them to <code className="font-mono">POST /rail/ingest/payments</code>, publish to the configured topic or stream, or run{' '}
+          <code className="font-mono">python -m infra.producer webhook</code> in <code className="font-mono">Multi-GNN/</code>. For the recorded demo, start the bridge with{' '}
+          <code className="font-mono">RAIL_SOURCE=replay</code>.
+        </span>
+      )}
       <div className="ml-auto flex gap-1">
         <button disabled={busy} onClick={() => control({ paused: !paused })} className="h-7 rounded-sm border px-2.5 text-[12px] hover:bg-accent" title="Paused payments wait in the inbox; nothing is dropped">
           {paused ? 'Resume' : 'Pause'}

@@ -1,8 +1,10 @@
-"""Payment-rail replay engine: the backend of the Merchant Risk Console.
+"""Payment-rail engine: the backend of the Merchant Risk Console.
 
-Replays the real Nolambur dataset (nolambur_transactions.csv) in timestamp order,
-attaches the trained GIN checkpoint's score to every transaction, and runs the
-rule detectors on each transaction as it arrives. Analyst actions go through the
+Runs the rule detectors and the trained GIN checkpoint on every payment as it arrives.
+By default payments arrive live (RAIL_SOURCE=webhook | kafka | kinesis, infra/ingest.py)
+and the clock is their event time. RAIL_SOURCE=replay instead replays the Nolambur
+dataset (nolambur_transactions.csv) in timestamp order with full-graph scores, for the
+demo and for evaluation. Analyst actions go through the
 agent tools in agents/tools_impl.py, so freezes and 1930 reports land in
 agents/action_log.jsonl like every other agent action.
 
@@ -53,7 +55,7 @@ from pydantic import BaseModel, ValidationError
 from infra import feedback as infra_feedback
 from infra import integrations, rbac, sandbox, settings as infra_settings
 from infra.graph import MemoryGraph, make_graph, summarize
-from infra.ingest import Payment, PaymentBatch, Source, make_source
+from infra.ingest import HIGH_WATER, Payment, PaymentBatch, Source, make_source
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 LIVE_ROW_BASE = 1_000_000  # row ids for ingested payments, clear of the CSV's 0..N
@@ -984,6 +986,20 @@ class RailEngine:
             decision, why = "approve", "No direct or second-hop links to flagged accounts in the replayed history."
         return {"decision": decision, "reason": why, "results": results, "checkedAgainstRows": len(self.replayed), "graph": self.graph.backend}
 
+    def account_status(self, vpa: str) -> dict[str, Any]:
+        """For the registry check: is this settlement VPA flagged, held or frozen here?"""
+        acct = self.account_for(vpa.strip())
+        if not acct:
+            return {"seen": False, "flagged": False, "frozen": False, "held": False, "alerts": []}
+        return {
+            "seen": True,
+            "accountId": acct,
+            "flagged": self._flagged(acct),
+            "frozen": acct in self.frozen,
+            "held": acct in self.held,
+            "alerts": [a.id for a in self._alerts_on(acct) if a.status != "cleared"],
+        }
+
     def _party(self, acct: str, relative_to: str) -> dict[str, Any]:
         return {
             "accountId": acct,
@@ -1190,7 +1206,7 @@ class RailService:
         self.paused = False
         self.subscribers: set[asyncio.Queue] = set()
         self.predict_chain = predict_chain
-        self.mode = infra_settings.RAIL_SOURCE if infra_settings.RAIL_SOURCE in ("webhook", "kafka", "kinesis") else "replay"
+        self.mode = infra_settings.RAIL_SOURCE if infra_settings.RAIL_SOURCE in ("webhook", "kafka", "kinesis", "replay") else "webhook"
         self.inbox: asyncio.Queue = asyncio.Queue()
         self.source: Source = make_source()
         self.store = None
@@ -1222,24 +1238,33 @@ class RailService:
             return
         loop = asyncio.get_running_loop()
 
-        def push(payments: list[dict[str, Any]]) -> None:  # called from consumer threads too
-            loop.call_soon_threadsafe(self.inbox.put_nowait, (self.source.backend, payments))
+        def push(payments: list[dict[str, Any]], ack: Callable[[], None] | None = None) -> None:  # called from consumer threads too
+            loop.call_soon_threadsafe(self.inbox.put_nowait, (self.source.backend, payments, ack))
 
         if self.mode in ("kafka", "kinesis"):
-            asyncio.create_task(self.source.start(push))
+            asyncio.create_task(self.source.start(push, self.backlog))
         else:
-            await self.source.start(push)
+            await self.source.start(push, self.backlog)
         asyncio.create_task(self._loop())
 
-    def _drain_inbox(self) -> list[tuple[str, dict[str, Any]]]:
+    def backlog(self) -> int:
+        """Payments waiting in the inbox (consumers pause above ingest.HIGH_WATER)."""
+        return sum(len(item[1]) for item in list(self.inbox._queue))  # type: ignore[attr-defined]
+
+    def _drain_inbox(self) -> tuple[list[tuple[str, dict[str, Any]]], list[Callable[[], None]]]:
+        """Up to MAX_BATCH payments, and the acks of the batches this tick finishes. A batch
+        split across ticks is acked with its last part."""
         items: list[tuple[str, dict[str, Any]]] = []
+        acks: list[Callable[[], None]] = []
         while len(items) < MAX_BATCH and not self.inbox.empty():
-            source, payments = self.inbox.get_nowait()
+            source, payments, ack = self.inbox.get_nowait()
             room = MAX_BATCH - len(items)
             items.extend((source, p) for p in payments[:room])
             if len(payments) > room:  # put the rest back at the front of the next tick
-                self.inbox._queue.appendleft((source, payments[room:]))  # type: ignore[attr-defined]
-        return items
+                self.inbox._queue.appendleft((source, payments[room:], ack))  # type: ignore[attr-defined]
+            elif ack:
+                acks.append(ack)
+        return items, acks
 
     async def _score(self, payments: list[dict[str, Any]]) -> list[float | None]:
         """One /predict splice for the whole batch: each payment is an edge on the background graph."""
@@ -1279,7 +1304,7 @@ class RailService:
                 engine.advance(TICK_SECONDS * engine.speed)
                 ticked = True
             replay_rows = list(engine.batch) if ticked else []
-            items = self._drain_inbox()
+            items, acks = self._drain_inbox()
             live_rows: list[Row] = []
             if items:
                 payments = [p for _, p in items]
@@ -1290,6 +1315,8 @@ class RailService:
                 for source, idx in by_source.items():
                     live_rows += engine.ingest_live([payments[i] for i in idx], [scores[i] for i in idx], source)
                 self.ingest_stats["lastBatch"] = len(items)
+            for ack in acks:  # the engine has these now: let the consumers commit / checkpoint
+                ack()
             if ticked or engine.live or live_rows:
                 rows = [r.public() for r in replay_rows + live_rows]
                 if ticked:
@@ -1323,7 +1350,9 @@ class RailService:
                 "replay": {"enabled": self.mode == "replay", "file": "nolambur_transactions.csv"},
                 "source": self.source.describe(),
                 "webhook": {"endpoint": "POST /rail/ingest/payments", "signed": bool(infra_settings.RAIL_WEBHOOK_SECRET)},
-                "inboxDepth": sum(len(p) for _, p in list(self.inbox._queue)),  # type: ignore[attr-defined]
+                "inboxDepth": self.backlog(),
+                "highWater": HIGH_WATER,
+                "deadLetters": self.store.dead_letters_recent(8) if self.store else [],
                 **self.ingest_stats,
                 "ingestedThisRun": eng.live_count if eng else 0,
                 "duplicatesDropped": eng.duplicates if eng else 0,
@@ -1332,7 +1361,17 @@ class RailService:
             "store": {**(self.store.describe() if self.store else {"backend": None}), "error": self.store_error, **(self.store.counts() if self.store else {})},
             "integrations": integrations.describe() if self.store else {"error": self.store_error},
             "runId": eng.run_id if eng else None,
+            "registry": self._registry_status(),
         }
+
+    def _registry_status(self) -> dict[str, Any]:
+        try:
+            from infra.registry import get_registry
+
+            st = get_registry().status()
+            return {k: st[k] for k in ("companies", "directors", "directorships", "disqualifiedDirectors", "linkedAccounts", "provider")}
+        except Exception as error:
+            return {"error": f"{type(error).__name__}: {error}"[:300]}
 
     def publish(self, event: dict[str, Any]) -> None:
         payload = json.dumps(event, default=str)
@@ -1364,7 +1403,10 @@ class ControlBody(BaseModel):
 
 
 class OnboardingBody(BaseModel):
-    vpas: list[str]
+    vpas: list[str] = []
+    cin: str | None = None  # company applicant: run the MCA registry checks too
+    dins: list[str] = []  # directors the applicant declared
+    register: bool = False  # record the VPAs against the CIN, so later applicants linked to it are checked against them
 
 
 def mount(app, load: Callable[[], tuple[pd.DataFrame, Any]], predict_chain: Callable[[list[dict[str, Any]]], dict[str, Any]]) -> RailService:
@@ -1493,9 +1535,71 @@ def mount(app, load: Callable[[], tuple[pd.DataFrame, Any]], predict_chain: Call
     async def onboarding_check(body: OnboardingBody, who: rbac.Principal = Who) -> dict[str, Any]:
         who.require("onboarding")
         started = time.perf_counter()
-        result = await service.graph_call(engine().onboarding_check, [v for v in body.vpas if v.strip()][:10])
+        eng = engine()
+        vpas = [v.strip() for v in body.vpas if v.strip()][:10]
+        cin = (body.cin or "").strip()
+        if not vpas and not cin:
+            raise HTTPException(status_code=422, detail="give settlement VPAs, a CIN, or both")
+        if vpas:
+            result = await service.graph_call(eng.onboarding_check, vpas)
+        else:
+            result = {"decision": "approve", "reason": "No settlement VPAs given; registry checks only.", "results": [], "checkedAgainstRows": len(eng.replayed), "graph": eng.graph.backend}
+        if cin:
+            try:
+                from infra.registry import get_registry, merge
+
+                reg = await asyncio.to_thread(get_registry)
+                report = await asyncio.to_thread(reg.report, cin, None, eng.account_status, [d for d in body.dins if d.strip()][:20])
+                result = merge(result, report)
+                if body.register and vpas:
+                    result["registered"] = await asyncio.to_thread(reg.link_accounts, cin, vpas, f"onboarding:{who.actor}")
+            except Exception as error:  # the transaction check still answers
+                result["registryError"] = f"{type(error).__name__}: {error}"[:300]
         result["latencyMs"] = (time.perf_counter() - started) * 1000
         return result
+
+    # ------------------------------------------------------------------ MCA registry
+
+    async def _registry():
+        try:
+            from infra.registry import get_registry
+
+            return await asyncio.to_thread(get_registry)
+        except Exception as error:
+            raise HTTPException(status_code=503, detail=f"registry unavailable: {type(error).__name__}: {error}"[:300])
+
+    @router.get("/registry/status")
+    async def registry_status() -> dict[str, Any]:
+        reg = await _registry()
+        return await asyncio.to_thread(reg.status)
+
+    @router.get("/registry/company/{cin}")
+    async def registry_company(cin: str) -> dict[str, Any]:
+        """The full linkage report for one CIN, checked against the rail's current state."""
+        reg = await _registry()
+        return await asyncio.to_thread(reg.report, cin, None, engine().account_status)
+
+    @router.get("/registry/director/{din}")
+    async def registry_director(din: str) -> dict[str, Any]:
+        reg = await _registry()
+        out = await asyncio.to_thread(reg.director, din)
+        if not out:
+            raise HTTPException(status_code=404, detail=f"DIN {din} is not in the registry")
+        return out
+
+    @router.post("/registry/import")
+    async def registry_import(request: Request, kind: str, source: str | None = None, who: rbac.Principal = Who) -> dict[str, Any]:
+        """Load a CSV sent as the request body (text/csv): kind = companies | directorships | disqualified | accounts."""
+        who.require("registry_import", "loading registry data")
+        reg = await _registry()
+        text = (await request.body()).decode("utf-8-sig", errors="replace")
+        try:
+            out = await asyncio.to_thread(reg.load, kind, text, source or f"upload:{kind}")
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error))
+        eng = engine()
+        eng._log("registry_import", who.actor, f"Loaded {out['loaded']} {kind} rows from {out['source']} ({out['skipped']} skipped).", role=who.role)
+        return out
 
     # ------------------------------------------------------------------ platform
 
@@ -1514,10 +1618,10 @@ def mount(app, load: Callable[[], tuple[pd.DataFrame, Any]], predict_chain: Call
             service.ingest_stats["rejected"] += 1
             detail = error.errors() if isinstance(error, ValidationError) else str(error)
             return JSONResponse({"detail": json.loads(json.dumps(detail, default=str))}, status_code=422)
-        depth = sum(len(p) for _, p in list(service.inbox._queue))  # type: ignore[attr-defined]
+        depth = service.backlog()
         if depth + len(batch) > MAX_INBOX:
             return JSONResponse({"detail": "ingest backlog full, retry later", "queued": depth}, status_code=429, headers={"Retry-After": "2"})
-        service.inbox.put_nowait(("webhook", [p.model_dump() for p in batch]))
+        service.inbox.put_nowait(("webhook", [p.model_dump() for p in batch], None))
         service.ingest_stats["webhookAccepted"] += len(batch)
         return {
             "accepted": len(batch),

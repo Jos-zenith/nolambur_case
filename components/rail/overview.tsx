@@ -580,7 +580,7 @@ export function SectionTitle({ icon: Icon, eyebrow, title, children, right }: { 
 // ---------------------------------------------------------------------------- the page
 
 const STATUS = [
-  { part: 'Transactions', state: 'Working', note: 'CSV replay by default (synthetic, not a bank feed). RAIL_SOURCE=webhook | kafka | kinesis switches to a live stream; payments are scored online as they arrive.' },
+  { part: 'Transactions', state: 'Working', note: 'Live by default: payments arrive on the webhook, a Kafka topic or a Kinesis stream and are scored online. Offsets and checkpoints are committed only after the engine has processed a batch; bad messages go to a dead-letter table. Tested against a real Kafka broker and a Kinesis emulator, not production AWS. This public demo runs RAIL_SOURCE=replay over the synthetic dataset.' },
   { part: 'GNN score on every row', state: 'Working', note: 'Trained GIN checkpoint, one full-graph pass at bridge start-up (about 30 s on CPU).' },
   { part: 'Detectors, queue, lead time', state: 'Working', note: 'Multi-GNN/rail_engine.py. Detectors never read the fraud labels.' },
   { part: 'Precision and recall', state: 'Working', note: 'Measured against nolambur_labels.csv, live in the console and for the full dataset on the model page.' },
@@ -588,7 +588,7 @@ const STATUS = [
   { part: 'Automatic hold', state: 'Working', note: 'A critical alert the model scores 0.9+ holds the account at once; its transfers are blocked until a supervisor confirms or releases.' },
   { part: 'Freeze, 1930 report, SMS', state: 'Sandboxed', note: 'Real signed HTTP through a retrying outbox, to sandbox REST mocks of the bank gateway and 1930 portal. No real bank or CFCFRMS. SMS is real with Twilio keys.' },
   { part: 'Roles and audit', state: 'Working', note: 'Analyst / supervisor / admin enforced by the bridge. Audit trail in SQLite or Postgres, append-only and hash-chained; /platform verifies it.' },
-  { part: 'Director / MCA linkage', state: 'Not built', note: 'The dataset has no company or director data. The onboarding check uses transaction links instead.' },
+  { part: 'Director / MCA linkage', state: 'Working, no data loaded', note: 'Onboarding takes a CIN and checks directors (disqualified, over the s.165 limit), common-control groups, registered-address farms and linked companies\u2019 flagged settlement VPAs. Loads real MCA / data.gov.in files or a vendor API; the demo ships with an empty registry.' },
 ]
 
 const JOURNEY = [

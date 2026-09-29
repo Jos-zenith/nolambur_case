@@ -32,6 +32,10 @@ services:
         value: 0.0.0.0
       - key: GNN_KEEP_ALIVE_URL
         value: https://vict-bridge.onrender.com/health
+      # The public demo replays the recorded dataset. Without this the bridge starts in
+      # live mode (the default) and waits for payments on the webhook.
+      - key: RAIL_SOURCE
+        value: replay
 
 # Uptime monitors (UptimeRobot, every 5 min):
 #   https://vict.onrender.com/health                    frontend up?

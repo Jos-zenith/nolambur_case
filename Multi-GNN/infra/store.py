@@ -123,6 +123,31 @@ sandbox_records = Table(
     Column("received_at", Float, nullable=False),
 )
 
+# Where each stream consumer has got to, written only after the engine has processed the
+# payments (infra/ingest.py). Kafka keeps its own committed offsets; this table is
+# Kinesis's (one row per shard) and a mirror of Kafka's for the platform page.
+stream_checkpoints = Table(
+    "stream_checkpoints", metadata,
+    Column("source", String(20), primary_key=True),   # kafka | kinesis
+    Column("stream", String(200), primary_key=True),  # topic or stream name
+    Column("shard", String(80), primary_key=True),    # partition or shard id
+    Column("position", String(130), nullable=False),  # next offset, or last sequence number processed
+    Column("closed", Integer, nullable=False, default=0),  # 1 = a Kinesis shard read to its end (resharded)
+    Column("updated_at", Float, nullable=False),
+)
+
+# Messages a consumer could not parse or validate. Kept so nothing is silently lost and a
+# fixed message can be replayed with POST /rail/ingest/payments.
+dead_letters = Table(
+    "ingest_dead_letters", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("source", String(20), nullable=False, index=True),
+    Column("position", String(200)),  # topic/partition/offset or stream/shard/sequence
+    Column("raw", Text),
+    Column("error", Text, nullable=False),
+    Column("at", Float, nullable=False),
+)
+
 
 def _make_engine(url: str) -> Engine:
     if url.startswith("sqlite"):
@@ -360,6 +385,49 @@ class Store:
         with self.engine.connect() as conn:
             return [_row(r) for r in conn.execute(stmt)]
 
+    # ------------------------------------------------------------------ stream consumers
+
+    def checkpoints(self, source: str, stream: str) -> dict[str, dict[str, Any]]:
+        stmt = select(stream_checkpoints).where(stream_checkpoints.c.source == source, stream_checkpoints.c.stream == stream)
+        with self.engine.connect() as conn:
+            return {r.shard: _row(r) for r in conn.execute(stmt)}
+
+    def save_checkpoints(self, source: str, stream: str, positions: dict[str, str], closed: set[str] = frozenset()) -> None:
+        """Upsert, synchronously: the caller acknowledges the stream only after this returns."""
+        if not positions and not closed:
+            return
+        now = time.time()
+        with self.engine.begin() as conn:
+            for shard in set(positions) | set(closed):
+                where = (stream_checkpoints.c.source == source, stream_checkpoints.c.stream == stream, stream_checkpoints.c.shard == shard)
+                values: dict[str, Any] = {"updated_at": now}
+                if shard in positions:
+                    values["position"] = positions[shard]
+                if shard in closed:
+                    values["closed"] = 1
+                if conn.execute(update(stream_checkpoints).where(*where).values(**values)).rowcount == 0:
+                    conn.execute(insert(stream_checkpoints).values(source=source, stream=stream, shard=shard, position=positions.get(shard, ""), closed=int(shard in closed), updated_at=now))
+
+    def dead_letter(self, source: str, position: str | None, raw: bytes | str | None, error: str) -> None:
+        """Once per position: a redelivered poison message is not recorded twice."""
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8", errors="replace")
+        values = dict(source=source, position=position, raw=(raw or "")[:20000], error=error[:1000], at=time.time())
+
+        def job() -> None:
+            with self.engine.begin() as conn:
+                seen = position and conn.execute(
+                    select(dead_letters.c.id).where(dead_letters.c.source == source, dead_letters.c.position == position).limit(1)
+                ).first()
+                if not seen:
+                    conn.execute(insert(dead_letters).values(**values))
+
+        self._writes.put(job)
+
+    def dead_letters_recent(self, limit: int = 20) -> list[dict[str, Any]]:
+        with self.engine.connect() as conn:
+            return [_row(r) for r in conn.execute(select(dead_letters).order_by(dead_letters.c.id.desc()).limit(limit))]
+
     # ------------------------------------------------------------------ summary
 
     def counts(self) -> dict[str, Any]:
@@ -376,6 +444,7 @@ class Store:
                 "agentActions": count(agent_actions),
                 "outbox": by_status,
                 "sandbox": {p: count(sandbox_records, sandbox_records.c.portal == p) for p in ("gateway", "cfcfrms")},
+                "deadLetters": count(dead_letters),
             }
 
 

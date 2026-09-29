@@ -1,17 +1,25 @@
 """Which backend each platform piece uses. Everything is env-driven, and every default
 runs on this machine with no extra services.
 
-    RAIL_SOURCE            replay (default) | webhook | kafka | kinesis
-                           replay  - the CSV replay drives the clock; POST /rail/ingest/payments
-                                     still works and injects payments at the replay clock.
-                           webhook - no replay; the clock is event time from incoming payments.
+    RAIL_SOURCE            webhook (default) | kafka | kinesis | replay
+                           webhook - live: the clock is event time from incoming payments, which
+                                     arrive on POST /rail/ingest/payments. Nothing is replayed.
                            kafka / kinesis - as webhook, plus a consumer on the topic / stream.
+                           replay  - demo and evaluation: nolambur_transactions.csv drives the clock
+                                     with full-graph GNN scores; webhook payments join at the replay clock.
     RAIL_WEBHOOK_SECRET    if set, ingest requests must carry X-Nolambur-Signature: sha256=<hmac>
     KAFKA_BOOTSTRAP        e.g. localhost:9092          (pip install aiokafka)
     KAFKA_TOPIC            default upi.payments
     KAFKA_GROUP            default nolambur-rail
+    KAFKA_OFFSET_RESET     earliest (default) | latest: where a new consumer group starts
     KINESIS_STREAM         stream name                  (pip install boto3; AWS creds from env)
+    KINESIS_START          TRIM_HORIZON (default) | LATEST: where a shard with no checkpoint starts
+    KINESIS_ENDPOINT       override the AWS endpoint (LocalStack, moto, a VPC endpoint)
     AWS_REGION             default ap-south-1
+
+    MCA_PROVIDER           none (default) | http: live company/director lookups (infra/registry.py)
+    MCA_API_URL            base URL of the lookup service (GET {url}/companies/{cin})
+    MCA_API_KEY            sent as Authorization: Bearer <key>
 
     RAIL_GRAPH             memory (default) | neo4j     (neo4j also covers Memgraph: both speak Bolt)
     NEO4J_URI              default bolt://localhost:7687 (pip install neo4j)
@@ -41,12 +49,15 @@ DATA_DIR = MULTI_GNN_DIR / "data"
 _PORT = os.getenv("GNN_PORT") or os.getenv("PORT") or "8001"
 BRIDGE_PUBLIC_URL = os.getenv("BRIDGE_PUBLIC_URL", f"http://127.0.0.1:{_PORT}").rstrip("/")
 
-RAIL_SOURCE = os.getenv("RAIL_SOURCE", "replay").lower()
+RAIL_SOURCE = os.getenv("RAIL_SOURCE", "webhook").lower()
 RAIL_WEBHOOK_SECRET = os.getenv("RAIL_WEBHOOK_SECRET", "")
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "upi.payments")
 KAFKA_GROUP = os.getenv("KAFKA_GROUP", "nolambur-rail")
+KAFKA_OFFSET_RESET = os.getenv("KAFKA_OFFSET_RESET", "earliest").lower()
 KINESIS_STREAM = os.getenv("KINESIS_STREAM", "")
+KINESIS_START = os.getenv("KINESIS_START", "TRIM_HORIZON").upper()
+KINESIS_ENDPOINT = os.getenv("KINESIS_ENDPOINT", "")
 AWS_REGION = os.getenv("AWS_REGION", "ap-south-1")
 
 RAIL_GRAPH = os.getenv("RAIL_GRAPH", "memory").lower()
@@ -61,6 +72,10 @@ GATEWAY_WEBHOOK_URL = os.getenv("GATEWAY_WEBHOOK_URL", f"{BRIDGE_PUBLIC_URL}/san
 GATEWAY_WEBHOOK_SECRET = os.getenv("GATEWAY_WEBHOOK_SECRET", "sandbox-secret")
 CFCFRMS_URL = os.getenv("CFCFRMS_URL", f"{BRIDGE_PUBLIC_URL}/sandbox/cfcfrms").rstrip("/")
 NPCI_REGISTRY_URL = os.getenv("NPCI_REGISTRY_URL", f"{BRIDGE_PUBLIC_URL}/sandbox/npci").rstrip("/")
+
+MCA_PROVIDER = os.getenv("MCA_PROVIDER", "none").lower()
+MCA_API_URL = os.getenv("MCA_API_URL", "").rstrip("/")
+MCA_API_KEY = os.getenv("MCA_API_KEY", "")
 
 RAIL_AUTO_HOLD = os.getenv("RAIL_AUTO_HOLD", "on").lower() not in ("off", "0", "false", "no")
 

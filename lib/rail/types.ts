@@ -188,9 +188,26 @@ export interface Platform {
   runId: string | null
   ingest: {
     mode: 'replay' | 'webhook' | 'kafka' | 'kinesis'
-    source: { backend: string; state: string; received: number; lastError: string | null; lastAt: number | null; [k: string]: unknown }
+    source: {
+      backend: string
+      state: string
+      received: number
+      acked?: number
+      deadLettered?: number
+      pausedForBacklog?: boolean
+      /** Kafka: messages behind the high-water marks. Kinesis: max MillisBehindLatest. */
+      lag?: number | null
+      lastError: string | null
+      lastAt: number | null
+      lastCommitAt?: number | null
+      partitions?: string[]
+      shards?: { id: string; state: string; millisBehind?: number | null; resumedFrom?: string | null; parents?: string[] }[]
+      [k: string]: unknown
+    }
     webhook: { endpoint: string; signed: boolean }
     inboxDepth: number
+    highWater?: number
+    deadLetters?: { id: number; source: string; position: string | null; error: string; at: number }[]
     webhookAccepted: number
     rejected: number
     scored: number
@@ -213,7 +230,9 @@ export interface Platform {
     agentActions?: number
     outbox?: Record<string, number>
     sandbox?: Record<string, number>
+    deadLetters?: number
   }
+  registry?: RegistryCounts
   integrations: {
     gateway?: { url: string; sandbox: boolean; signed: boolean }
     cfcfrms?: { url: string; sandbox: boolean }
@@ -283,4 +302,44 @@ export interface AuditVerify {
   head: string | null
   unchainedLegacyRows: number
   checkedAt: number
+}
+
+export interface RegistryCounts {
+  companies?: number
+  directors?: number
+  directorships?: number
+  disqualifiedDirectors?: number
+  linkedAccounts?: number
+  provider?: { mode: string; url: string | null; errors: number; lastError: string | null }
+  error?: string
+}
+
+export type FindingSeverity = 'high' | 'medium' | 'low'
+
+export interface RegistryReport {
+  cin: string
+  cinFacts: { valid: boolean; kind: string; listed?: boolean; state?: string; year?: number; type?: string }
+  company: {
+    cin: string
+    name: string | null
+    status: string | null
+    company_class: string | null
+    incorporated_on: string | null
+    state: string | null
+    roc: string | null
+    paid_up_capital: number | null
+    authorized_capital: number | null
+    activity: string | null
+    address: string | null
+    last_annual_return: number | null
+    source: string | null
+  } | null
+  directors: { din: string; name: string | null; designation: string | null; declared: boolean; disqualified: boolean; currentDirectorships: number; otherCompanies: { cin: string; name: string | null; status: string | null; current: boolean }[] }[]
+  commonControl: { cin: string; name: string | null; status: string | null; incorporatedOn: string | null; sharedDirectors: string[] }[]
+  sameAddress: { cin: string; name: string | null; status: string | null; incorporated_on: string | null }[]
+  sameAddressCount: number
+  crossover: { cin: string; vpa: string; via: string; frozen: boolean; held: boolean; flagged: boolean; alerts: string[] }[]
+  findings: { severity: FindingSeverity; code: string; text: string }[]
+  decision: 'approve' | 'review' | 'hold'
+  provider: string
 }

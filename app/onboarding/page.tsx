@@ -9,18 +9,108 @@ import { railPost, useRail } from '@/lib/rail/store'
 import { cn } from '@/lib/utils'
 import { ScanSearch } from 'lucide-react'
 import { PageHeader, Term } from '@/components/rail/kit'
+import type { RegistryCounts, RegistryReport } from '@/lib/rail/types'
 
 type Party = { accountId: string; vpa: string; frozen: boolean; alerts: string[]; via?: string }
 type Result = {
-  decision: 'approve' | 'hold'
+  decision: 'approve' | 'review' | 'hold'
   reason: string
+  registry?: RegistryReport
+  registryError?: string
+  registered?: number
   latencyMs: number
   checkedAgainstRows: number
   results: { vpa: string; known: boolean; txns: number; counterparties?: number; selfFlagged?: boolean; direct: Party[]; secondHop: Party[]; gnnMax: number }[]
 }
 
+const DECISION = {
+  hold: { label: 'Hold for review', bg: 'bg-sev-critical-bg', fg: 'text-sev-critical' },
+  review: { label: 'Approve after manual review', bg: 'bg-sev-medium-bg', fg: 'text-sev-medium' },
+  approve: { label: 'Approve', bg: 'bg-ok-bg', fg: 'text-ok' },
+} as const
+
+const SEV = { high: 'text-sev-critical', medium: 'text-sev-medium', low: 'text-muted-foreground' } as const
+
+function RegistryPanel({ r }: { r: RegistryReport }) {
+  const c = r.company
+  return (
+    <div className="grid gap-3 border-b p-4">
+      <div>
+        <p className="text-[13px] font-semibold">
+          {c?.name ?? 'Not in the registry'} <span className="font-mono text-[12px] font-normal text-muted-foreground">{r.cin}</span>
+        </p>
+        {c && (
+          <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+            {[c.status, c.company_class, c.incorporated_on && `incorporated ${c.incorporated_on}`, c.paid_up_capital !== null && `paid-up ₹${c.paid_up_capital.toLocaleString('en-IN')}`, c.roc]
+              .filter(Boolean)
+              .join(' · ')}
+            {c.address && <span className="block">{c.address}</span>}
+          </p>
+        )}
+      </div>
+      {r.findings.length > 0 ? (
+        <ul className="grid gap-1 text-[13px]">
+          {r.findings.map(f => (
+            <li key={f.code + f.text} className="grid grid-cols-[64px_1fr] gap-2">
+              <span className={cn('text-[11.5px] font-medium uppercase', SEV[f.severity])}>{f.severity}</span>
+              <span>{f.text}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[13px] text-ok">No registry findings.</p>
+      )}
+      {r.directors.length > 0 && (
+        <Table head={['Director', 'DIN', 'Current boards', 'Other companies']}>
+          {r.directors.map(d => (
+            <tr key={d.din} className="border-b align-top last:border-0">
+              <td className="py-1.5 pr-3">
+                {d.name ?? '—'}
+                {d.disqualified && <span className="ml-1.5 text-[11.5px] font-medium text-sev-critical">disqualified</span>}
+                {d.declared && <span className="ml-1.5 text-[11.5px] text-muted-foreground">declared</span>}
+              </td>
+              <td className="py-1.5 pr-3 font-mono text-[12px]">{d.din}</td>
+              <td className="py-1.5 pr-3 tabular-nums">{d.currentDirectorships}</td>
+              <td className="py-1.5 text-[12px]">
+                {d.otherCompanies.length === 0
+                  ? '—'
+                  : d.otherCompanies.slice(0, 5).map(o => (
+                      <span key={o.cin} className="block">
+                        <span className="font-mono">{o.cin}</span> {o.name ?? ''}{' '}
+                        <span className="text-muted-foreground">{[o.status, !o.current && 'ceased'].filter(Boolean).join(', ')}</span>
+                      </span>
+                    ))}
+                {d.otherCompanies.length > 5 && <span className="text-muted-foreground">+{d.otherCompanies.length - 5} more</span>}
+              </td>
+            </tr>
+          ))}
+        </Table>
+      )}
+      {r.crossover.length > 0 && (
+        <Table head={['Linked company', 'Via', 'Settlement VPA', 'In the rail']}>
+          {r.crossover.map(x => (
+            <tr key={x.cin + x.vpa} className="border-b last:border-0">
+              <td className="py-1.5 pr-3 font-mono text-[12px]">{x.cin}</td>
+              <td className="py-1.5 pr-3 text-[12.5px]">{x.via}</td>
+              <td className="py-1.5 pr-3 font-mono text-[12px]">{x.vpa}</td>
+              <td className="py-1.5 text-[12.5px] text-sev-critical">{x.frozen ? 'frozen' : x.held ? 'on hold' : `alerts ${x.alerts.join(', ')}`}</td>
+            </tr>
+          ))}
+        </Table>
+      )}
+      <p className="text-[11.5px] text-muted-foreground">
+        From the MCA registry loaded on this bridge ({r.provider === 'http' ? 'files plus live lookups' : 'loaded files only'}). {r.sameAddressCount} other companies share the registered address.
+      </p>
+    </div>
+  )
+}
+
 export default function OnboardingPage() {
   const [vpas, setVpas] = useState('')
+  const [cin, setCin] = useState('')
+  const [dins, setDins] = useState('')
+  const [register, setRegister] = useState(true)
+  const [reg, setReg] = useState<RegistryCounts | null>(null)
   const [presets, setPresets] = useState<{ label: string; vpas: string[] }[]>([])
   const [result, setResult] = useState<Result | null>(null)
   const [busy, setBusy] = useState(false)
@@ -36,9 +126,18 @@ export default function OnboardingPage() {
       .catch(() => {})
   }, [backend, rowsReplayed > 400]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const submit = async (list: string[]) => {
+  useEffect(() => {
+    if (backend !== 'live') return
+    fetch('/api/rail/registry/status', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(setReg)
+      .catch(() => {})
+  }, [backend, result])
+
+  const submit = async (list: string[], withCompany = true) => {
     setBusy(true)
-    const { data } = await railPost<Result>('onboarding/check', { vpas: list })
+    const body = withCompany && cin.trim() ? { vpas: list, cin: cin.trim(), dins: parse(dins), register } : { vpas: list }
+    const { data } = await railPost<Result>('onboarding/check', body)
     setResult(data)
     setBusy(false)
   }
@@ -55,7 +154,8 @@ export default function OnboardingPage() {
           { title: 'Enter settlement VPAs', body: <>Paste the <Term k="vpa">VPAs</Term> the merchant wants payouts sent to, or pick a sample built from the real data.</> },
           { title: 'We walk the graph', body: 'Every account these VPAs have paid or been paid by, then everyone those accounts dealt with: two hops out.' },
           { title: 'Direct link = hold', body: <>A transfer with a flagged or frozen account, or a transfer the GNN scores 0.9+, holds the merchant for review.</> },
-          { title: 'Second hop = watch', body: 'A link only through someone else is a reason to monitor, not to refuse. Director links need MCA data, which this dataset lacks.' },
+          { title: 'Second hop = watch', body: 'A link only through someone else is a reason to monitor, not to refuse.' },
+          { title: 'Company applicants', body: 'Add the CIN and the MCA registry checks the directors, their other companies and the registered address, then whether a linked company’s settlement account is flagged here.' },
         ]}
       >
         Keep <Term k="mule">mules</Term> off the platform in the first place: check a new merchant against everything the engine has seen so far.
@@ -81,7 +181,7 @@ export default function OnboardingPage() {
                       type="button"
                       onClick={() => {
                         setVpas(p.vpas.join('\n'))
-                        submit(p.vpas)
+                        submit(p.vpas, false)
                       }}
                       className="h-7 rounded-sm border px-2 text-[12px] hover:bg-accent"
                     >
@@ -96,7 +196,39 @@ export default function OnboardingPage() {
               <span className="text-[12px] text-muted-foreground">Settlement VPAs (one per line)</span>
               <textarea value={vpas} onChange={e => setVpas(e.target.value)} rows={4} placeholder="abcd1234@ybl" className="rounded-sm border bg-background px-2.5 py-1.5 font-mono text-[13px] outline-none focus:border-primary" />
             </label>
-            <button disabled={busy || !parse(vpas).length} className="h-9 rounded-sm bg-primary text-[13px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
+            <label className="grid gap-1">
+              <span className="text-[12px] text-muted-foreground">Company CIN (optional)</span>
+              <input value={cin} onChange={e => setCin(e.target.value.toUpperCase())} placeholder="U72900MH2021PTC123456" className="h-8 rounded-sm border bg-background px-2.5 font-mono text-[13px] outline-none focus:border-primary" />
+            </label>
+            {cin.trim() && (
+              <>
+                <label className="grid gap-1">
+                  <span className="text-[12px] text-muted-foreground">Directors the applicant declared (DINs, optional)</span>
+                  <input value={dins} onChange={e => setDins(e.target.value)} placeholder="01234567, 07654321" className="h-8 rounded-sm border bg-background px-2.5 font-mono text-[13px] outline-none focus:border-primary" />
+                </label>
+                <label className="flex items-start gap-2 text-[12.5px]">
+                  <input type="checkbox" checked={register} onChange={e => setRegister(e.target.checked)} className="mt-0.5" />
+                  <span>Record these VPAs against this CIN, so later applicants linked to this company are checked against them</span>
+                </label>
+              </>
+            )}
+            <p className="text-[12px] text-muted-foreground">
+              {!reg ? (
+                'Registry status unavailable.'
+              ) : reg.error ? (
+                `Registry unavailable: ${reg.error}`
+              ) : reg.companies ? (
+                <>
+                  Registry: {reg.companies.toLocaleString('en-IN')} companies · {(reg.directorships ?? 0).toLocaleString('en-IN')} directorships · {reg.disqualifiedDirectors} disqualified DINs ·{' '}
+                  {reg.linkedAccounts} linked VPAs{reg.provider?.mode === 'http' ? ' · live lookups on' : ''}
+                </>
+              ) : (
+                <>
+                  Registry is empty{reg.provider?.mode === 'http' ? ' (live lookups on)' : ''}. Load MCA files with <code className="font-mono">python -m infra.registry load</code>.
+                </>
+              )}
+            </p>
+            <button disabled={busy || (!parse(vpas).length && !cin.trim())} className="h-9 rounded-sm bg-primary text-[13px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
               {busy ? 'Checking…' : 'Run check'}
             </button>
           </form>
@@ -107,15 +239,18 @@ export default function OnboardingPage() {
                 <p className="p-4 text-[13px] text-muted-foreground">Pick a sample applicant or paste VPAs from the transaction tape.</p>
               ) : (
                 <>
-                  <div className={cn('border-b px-4 py-3', result.decision === 'hold' ? 'bg-sev-critical-bg' : 'bg-ok-bg')}>
-                    <p className={cn('text-[12px] font-medium uppercase tracking-wide', result.decision === 'hold' ? 'text-sev-critical' : 'text-ok')}>Recommendation</p>
-                    <p className="mt-0.5 text-[20px] font-semibold">{result.decision === 'hold' ? 'Hold for review' : 'Approve'}</p>
+                  <div className={cn('border-b px-4 py-3', DECISION[result.decision].bg)}>
+                    <p className={cn('text-[12px] font-medium uppercase tracking-wide', DECISION[result.decision].fg)}>Recommendation</p>
+                    <p className="mt-0.5 text-[20px] font-semibold">{DECISION[result.decision].label}</p>
                     <p className="mt-1 text-[13px]">{result.reason}</p>
+                    {result.registryError && <p className="mt-1 text-[12.5px] text-sev-critical">Registry check failed: {result.registryError}</p>}
+                    {!!result.registered && <p className="mt-1 text-[12.5px] text-muted-foreground">Recorded {result.registered} VPA(s) against {result.registry?.cin}.</p>}
                   </div>
                   <p className="border-b px-4 py-2 text-[12px] text-muted-foreground">
                     Checked against <span className="text-foreground">{result.checkedAgainstRows.toLocaleString('en-IN')}</span> replayed rows in{' '}
                     <span className="font-mono text-foreground">{result.latencyMs.toFixed(1)} ms</span>
                   </p>
+                  {result.registry && <RegistryPanel r={result.registry} />}
                   <div className="grid gap-4 p-4">
                     {result.results.map(r => (
                       <div key={r.vpa}>

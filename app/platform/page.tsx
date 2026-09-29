@@ -10,7 +10,10 @@ import { Server } from 'lucide-react'
 import { PageHeader, Term } from '@/components/rail/kit'
 
 const ENV = [
-  ['RAIL_SOURCE', 'replay · webhook · kafka · kinesis'],
+  ['RAIL_SOURCE', 'webhook (default) · kafka · kinesis · replay (demo / evaluation)'],
+  ['KAFKA_BOOTSTRAP / KAFKA_TOPIC / KAFKA_GROUP', 'broker, topic (upi.payments), consumer group; KAFKA_OFFSET_RESET for a new group'],
+  ['KINESIS_STREAM / KINESIS_START', 'stream name; TRIM_HORIZON (default) or LATEST for a shard with no checkpoint'],
+  ['MCA_PROVIDER / MCA_API_URL', 'none (loaded files only) · http (live company and director lookups)'],
   ['RAIL_GRAPH', 'memory · neo4j (also Memgraph)'],
   ['RAIL_DB_URL', 'sqlite:///… · postgresql+psycopg://…'],
   ['GATEWAY_WEBHOOK_URL', 'bank gateway receiving freeze instructions'],
@@ -104,7 +107,7 @@ export default function PlatformPage() {
         title="Platform"
         guideKey="platform"
         guide={[
-          { title: 'Four cards, four jobs', body: 'Ingest (payments in), graph (who paid whom), audit store (decisions), integrations (actions out).' },
+          { title: 'Five cards, five jobs', body: 'Ingest (payments in), graph (who paid whom), audit store (decisions), integrations (actions out), company registry (who owns the merchant).' },
           { title: 'Green dot = healthy', body: 'Each card shows its backend and its last error. Local defaults need no extra services.' },
           { title: 'Every action is delivered', body: 'Freezes and 1930 reports go through an outbox that retries until the other side confirms.' },
           { title: 'Tamper-evident', body: <>Verify re-computes the hash chain of the <Term k="audit trail">audit trail</Term> and names any altered row.</> },
@@ -120,11 +123,23 @@ export default function PlatformPage() {
           <div className="grid gap-3 md:grid-cols-2">
             <Card title="Ingest" backend={i.mode} ok={!i.source.lastError && !i.lastScoreError && !i.lastTickError}>
               <Row k="Clock" v={i.mode === 'replay' ? 'CSV replay; webhook payments join at the replay clock' : 'event time of incoming payments'} mono={false} />
-              {(i.mode === 'kafka' || i.mode === 'kinesis') && <Row k="Consumer" v={`${i.source.backend} · ${i.source.state} · ${i.source.received} received`} />}
+              {(i.mode === 'kafka' || i.mode === 'kinesis') && (
+                <>
+                  <Row k="Consumer" v={`${i.source.backend} · ${i.source.state}`} />
+                  <Row k="Received / committed" v={`${i.source.received} / ${i.source.acked ?? 0}${i.source.lastCommitAt ? ` · last commit ${when(i.source.lastCommitAt)}` : ''}`} />
+                  <Row
+                    k="Lag"
+                    v={i.source.lag === null || i.source.lag === undefined ? '—' : i.mode === 'kafka' ? `${i.source.lag} messages` : `${Math.round(i.source.lag / 1000)} s behind`}
+                  />
+                  {i.mode === 'kafka' && <Row k="Partitions" v={i.source.partitions?.join(', ') || 'none assigned'} />}
+                  {i.mode === 'kinesis' && <Row k="Shards" v={(i.source.shards ?? []).map(sh => `${sh.id.replace('shardId-', '')} ${sh.state}`).join(' · ') || '—'} />}
+                </>
+              )}
               <Row k="Webhook" v={`${i.webhook.endpoint}${i.webhook.signed ? ' · HMAC required' : ' · unsigned'}`} />
               <Row k="Webhook accepted / rejected" v={`${i.webhookAccepted} / ${i.rejected}`} />
               <Row k="Ingested this run" v={`${i.ingestedThisRun} · ${i.duplicatesDropped} duplicates dropped`} />
-              <Row k="Inbox depth" v={i.inboxDepth} />
+              <Row k="Inbox depth" v={`${i.inboxDepth}${i.highWater ? ` · consumers pause above ${i.highWater.toLocaleString('en-IN')}` : ''}${i.source.pausedForBacklog ? ' · paused now' : ''}`} />
+              <Row k="Dead letters" v={i.deadLetters?.length ? `${p.store.deadLetters ?? i.deadLetters.length} · last ${i.deadLetters[0].position ?? i.deadLetters[0].source}` : '0'} />
               <Row k="Scored online" v={`${i.scored}${i.lastScoreMs !== null ? ` · last batch ${i.lastScoreMs} ms` : ''}${i.scoreErrors ? ` · ${i.scoreErrors} failed` : ''}`} />
               {(i.source.lastError || i.lastScoreError || i.lastTickError) && (
                 <Row k="Last error" v={<span className="text-sev-critical">{i.source.lastError || i.lastScoreError || i.lastTickError}</span>} />
@@ -157,6 +172,32 @@ export default function PlatformPage() {
               <Row k="Delivery worker" v={it.workerAlive ? 'running' : 'stopped'} />
             </Card>
           </div>
+
+          {p.registry && (
+            <div className="grid gap-3 md:grid-cols-2">
+              <Card title="Company registry (MCA)" backend={p.registry.provider?.mode === 'http' ? 'files + api' : 'files'} ok={!p.registry.error && !p.registry.provider?.lastError}>
+                {p.registry.error ? (
+                  <Row k="Error" v={<span className="text-sev-critical">{p.registry.error}</span>} />
+                ) : (
+                  <>
+                    <Row k="Companies" v={(p.registry.companies ?? 0).toLocaleString('en-IN')} />
+                    <Row k="Directorships" v={`${(p.registry.directorships ?? 0).toLocaleString('en-IN')} · ${p.registry.directors ?? 0} directors · ${p.registry.disqualifiedDirectors ?? 0} disqualified`} />
+                    <Row k="Merchant VPAs linked to a CIN" v={p.registry.linkedAccounts ?? 0} />
+                    <Row k="Live lookups" v={p.registry.provider?.mode === 'http' ? p.registry.provider.url ?? 'on' : 'off (MCA_PROVIDER=none)'} />
+                    <Row k="Serves" v="onboarding: directors, common control, address farms, linked flagged accounts" mono={false} />
+                    {!p.registry.companies && <Row k="Note" v="Empty. Load files with python -m infra.registry load" mono={false} />}
+                  </>
+                )}
+              </Card>
+              {!!i.deadLetters?.length && (
+                <Card title="Dead letters" backend="ingest" ok={false}>
+                  {i.deadLetters.slice(0, 6).map(d => (
+                    <Row key={d.id} k={`${d.source} ${when(d.at)}`} v={<span title={d.error}>{d.position ?? '—'}: {d.error}</span>} />
+                  ))}
+                </Card>
+              )}
+            </div>
+          )}
 
           <Section title="Recent deliveries" note="every freeze and 1930 complaint goes through the outbox; failures retry with backoff">
             {!it.recent?.length ? (
