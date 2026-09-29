@@ -223,7 +223,10 @@ class Store:
 
     def describe(self) -> dict[str, Any]:
         safe = self.engine.url.render_as_string(hide_password=True)
-        return {"backend": self.backend, "url": safe, "writeErrors": self.write_errors, "lastWriteError": self.last_write_error, "writeQueue": self._writes.qsize()}
+        durable = self.backend != "sqlite" or not settings.EPHEMERAL_DISK
+        return {"backend": self.backend, "url": safe, "writeErrors": self.write_errors, "lastWriteError": self.last_write_error, "writeQueue": self._writes.qsize(),
+                "durable": durable,
+                "warning": None if durable else "SQLite on an ephemeral disk: the audit trail is lost on every redeploy. Set RAIL_DB_URL (or DATABASE_URL) to Postgres."}
 
     # ------------------------------------------------------------------ writer thread
 
@@ -261,8 +264,9 @@ class Store:
         row = {
             "run_id": run_id,
             "entry_id": entry["id"],
-            "at": entry["at"],
-            "sim_t": entry.get("simT"),
+            # floats, as the database returns them, so the hash is stable whatever the caller passed
+            "at": float(entry["at"]),
+            "sim_t": float(entry["simT"]) if entry.get("simT") is not None else None,
             "action": entry["action"],
             "actor": entry.get("actor"),
             "role": entry.get("role"),

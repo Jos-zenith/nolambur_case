@@ -1,0 +1,111 @@
+{
+  "version": "v2",
+  "seed": 7,
+  "days": 10,
+  "start": "2024-03-11T00:00:00",
+  "transactions": 83067,
+  "fraudTransactions": 419,
+  "illicitPct": 0.504,
+  "accounts": 5680,
+  "victims": 51,
+  "l1Mules": 36,
+  "l2Mules": 109,
+  "maxP2P": 100000,
+  "fraudByLayer": {
+    "L0→L1": 105,
+    "L1→L2": 235,
+    "L2→L2": 79
+  },
+  "campaigns": [
+    {
+      "campaign": "C01",
+      "start": "2024-03-11T10:04:48",
+      "split": "train",
+      "victims": 5,
+      "l1": 5,
+      "l2": 14,
+      "reusedL2": 0
+    },
+    {
+      "campaign": "C02",
+      "start": "2024-03-12T09:07:12",
+      "split": "train",
+      "victims": 5,
+      "l1": 2,
+      "l2": 13,
+      "reusedL2": 0
+    },
+    {
+      "campaign": "C03",
+      "start": "2024-03-13T13:12:00",
+      "split": "train",
+      "victims": 6,
+      "l1": 5,
+      "l2": 15,
+      "reusedL2": 2
+    },
+    {
+      "campaign": "C04",
+      "start": "2024-03-14T09:36:00",
+      "split": "train",
+      "victims": 7,
+      "l1": 2,
+      "l2": 9,
+      "reusedL2": 3
+    },
+    {
+      "campaign": "C05",
+      "start": "2024-03-15T01:12:00",
+      "split": "train",
+      "victims": 6,
+      "l1": 2,
+      "l2": 17,
+      "reusedL2": 4
+    },
+    {
+      "campaign": "C06",
+      "start": "2024-03-15T14:52:48",
+      "split": "train",
+      "victims": 7,
+      "l1": 4,
+      "l2": 11,
+      "reusedL2": 4
+    },
+    {
+      "campaign": "C07",
+      "start": "2024-03-17T04:48:00",
+      "split": "val",
+      "victims": 3,
+      "l1": 3,
+      "l2": 14,
+      "reusedL2": 4
+    },
+    {
+      "campaign": "C08",
+      "start": "2024-03-17T18:00:00",
+      "split": "val",
+      "victims": 5,
+      "l1": 5,
+      "l2": 19,
+      "reusedL2": 4
+    },
+    {
+      "campaign": "C09",
+      "start": "2024-03-19T03:36:00",
+      "split": "test",
+      "victims": 3,
+      "l1": 5,
+      "l2": 15,
+      "reusedL2": 4
+    },
+    {
+      "campaign": "C10",
+      "start": "2024-03-19T16:48:00",
+      "split": "test",
+      "victims": 4,
+      "l1": 3,
+      "l2": 11,
+      "reusedL2": 4
+    }
+  ]
+}

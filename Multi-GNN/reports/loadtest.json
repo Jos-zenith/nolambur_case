@@ -1,0 +1,111 @@
+{
+  "mode": "engine",
+  "at": "2026-09-29T14:32:41",
+  "hardware": {
+    "python": "3.12.10",
+    "os": "Windows-11-10.0.26200-SP0",
+    "logicalCpus": 12,
+    "cpu": "12th Gen Intel(R) Core(TM) i7-1255U",
+    "ramGb": 15.7,
+    "torchThreads": 10
+  },
+  "seconds": 20.0,
+  "runs": [
+    {
+      "targetTps": 1000,
+      "shards": 10,
+      "accounts": 55558,
+      "seededEdges": 244770,
+      "batchPerTick": 500,
+      "ticks": 40,
+      "graphEdges": 274770,
+      "sustainedTps": 1545,
+      "keepsUp": true,
+      "p99WithinTick": false,
+      "tickMs": {
+        "p50": 291.1,
+        "p99": 507.3,
+        "max": 576.7
+      },
+      "scoreMs": {
+        "p50": 240.8,
+        "p99": 323.8
+      },
+      "rulesMs": {
+        "p50": 52.3,
+        "p99": 234.4
+      },
+      "paymentLatencyMs": {
+        "p50": 541.1,
+        "p99": 757.3,
+        "note": "half a tick of batching (250 ms) plus the batch's processing time"
+      },
+      "medianSubgraphEdges": 43900,
+      "alerts": 70
+    },
+    {
+      "targetTps": 2000,
+      "shards": 20,
+      "accounts": 111046,
+      "seededEdges": 489540,
+      "batchPerTick": 1000,
+      "ticks": 40,
+      "graphEdges": 549540,
+      "sustainedTps": 2289,
+      "keepsUp": true,
+      "p99WithinTick": false,
+      "tickMs": {
+        "p50": 392.0,
+        "p99": 697.1,
+        "max": 708.1
+      },
+      "scoreMs": {
+        "p50": 330.3,
+        "p99": 571.9
+      },
+      "rulesMs": {
+        "p50": 62.3,
+        "p99": 246.7
+      },
+      "paymentLatencyMs": {
+        "p50": 642.0,
+        "p99": 947.1,
+        "note": "half a tick of batching (250 ms) plus the batch's processing time"
+      },
+      "medianSubgraphEdges": 88205,
+      "alerts": 131
+    },
+    {
+      "targetTps": 5000,
+      "shards": 50,
+      "accounts": 277651,
+      "seededEdges": 1223850,
+      "batchPerTick": 2500,
+      "ticks": 40,
+      "graphEdges": 1373850,
+      "sustainedTps": 1830,
+      "keepsUp": false,
+      "p99WithinTick": false,
+      "tickMs": {
+        "p50": 1344.2,
+        "p99": 2178.3,
+        "max": 2187.1
+      },
+      "scoreMs": {
+        "p50": 1065.6,
+        "p99": 1492.2
+      },
+      "rulesMs": {
+        "p50": 258.7,
+        "p99": 991.1
+      },
+      "paymentLatencyMs": {
+        "p50": 1594.2,
+        "p99": 2428.3,
+        "note": "half a tick of batching (250 ms) plus the batch's processing time"
+      },
+      "medianSubgraphEdges": 219238,
+      "alerts": 366
+    }
+  ]
+}

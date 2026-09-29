@@ -36,6 +36,21 @@ services:
       # live mode (the default) and waits for payments on the webhook.
       - key: RAIL_SOURCE
         value: replay
+      # Audit trail, decisions and outbox in Postgres: Render's disk is wiped on every
+      # redeploy, so SQLite there loses the audit trail. infra/settings.py rewrites the
+      # postgresql:// URL for the psycopg driver.
+      - key: RAIL_DB_URL
+        fromDatabase:
+          name: vict-audit
+          property: connectionString
+
+databases:
+  # Free Render Postgres expires 30 days after creation (then a paid plan, or export and
+  # recreate). Any Postgres works: set RAIL_DB_URL on the bridge by hand instead.
+  - name: vict-audit
+    plan: free
+    databaseName: rail
+    user: rail
 
 # Uptime monitors (UptimeRobot, every 5 min):
 #   https://vict.onrender.com/health                    frontend up?
@@ -49,5 +64,5 @@ services:
 #     or put the bridge on a paid instance.
 #   * 512 MB RAM. The bridge measured ~435 MB resident after warm-up on Windows; watch the
 #     Render logs for out-of-memory restarts.
-#   * The filesystem is ephemeral: the SQLite audit store (Multi-GNN/data/rail.db) resets on
-#     every restart or spin-down. Set RAIL_DB_URL to a Postgres database to keep it.
+#   * The filesystem is ephemeral: without RAIL_DB_URL the SQLite audit store
+#     (Multi-GNN/data/rail.db) resets on every restart or spin-down, and /platform says so.

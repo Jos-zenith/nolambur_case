@@ -6,7 +6,7 @@ import { clock } from '@/lib/rail/format'
 import { railPost, useRail, useRoles } from '@/lib/rail/store'
 import { cn } from '@/lib/utils'
 
-const SPEEDS = [1, 4, 20, 120, 600]
+const SPEEDS = [4, 60, 240, 600, 1800]
 
 export function ReplayBar() {
   const m = useRail(s => s.metrics)
@@ -29,9 +29,15 @@ export function ReplayBar() {
   const progress = m.rowsReplayed / m.rowsTotal
   const start = Date.parse(`${dataset.start}Z`) / 1000
   const end = Date.parse(`${dataset.end}Z`) / 1000
-  const fraudStart = (Date.parse(`${dataset.fraudWindow[0]}Z`) / 1000 - start) / (end - start)
-  const fraudEnd = (Date.parse(`${dataset.fraudWindow[1]}Z`) / 1000 - start) / (end - start)
+  const at = (iso: string | null) => (iso ? (Date.parse(iso.endsWith('Z') ? iso : `${iso}Z`) / 1000 - start) / (end - start) : 0)
   const timePos = Math.min(1, Math.max(0, (m.simT - start) / (end - start)))
+  // v2: the train / validation / test days; v1: the one window its fraud falls in
+  const bands = dataset.splits
+    ? [
+        { key: 'val', from: at(dataset.splits.val[0]), to: at(dataset.splits.val[1]), cls: 'bg-sev-medium/35', label: 'validation' },
+        { key: 'test', from: at(dataset.splits.test[0]), to: Math.min(1, at(dataset.splits.test[1])), cls: 'bg-ok/35', label: 'test' },
+      ]
+    : [{ key: 'fraud', from: at(dataset.fraudWindow[0]), to: at(dataset.fraudWindow[1]), cls: 'bg-sev-critical/40', label: 'fraud' }]
 
   return (
     <section className="grid gap-2 border bg-card px-3 py-2.5 md:grid-cols-[auto_1fr_auto] md:items-center md:gap-4">
@@ -43,15 +49,21 @@ export function ReplayBar() {
         {m.ingested > 0 && <span className="text-muted-foreground"> · +{m.ingested.toLocaleString('en-IN')} ingested via webhook</span>}
       </div>
       <div className="grid gap-1">
-        <div className="relative h-2 rounded-full bg-muted" title="Dataset timeline. The red band is the hour the fraud happens in.">
-          <div className="absolute inset-y-0 bg-sev-critical/40" style={{ left: `${fraudStart * 100}%`, width: `${Math.max(0.4, (fraudEnd - fraudStart) * 100)}%` }} />
+        <div className="relative h-2 rounded-full bg-muted" title={dataset.splits ? 'Days 0–5 train the model, 6–7 pick its threshold (amber), 8–9 are the test days every reported number comes from (green).' : 'Dataset timeline. The red band is when the fraud happens.'}>
+          {bands.map(b => (
+            <div key={b.key} className={cn('absolute inset-y-0', b.cls)} style={{ left: `${b.from * 100}%`, width: `${Math.max(0.4, (b.to - b.from) * 100)}%` }} />
+          ))}
           <div className="absolute inset-y-0 left-0 rounded-full bg-primary/70" style={{ width: `${timePos * 100}%` }} />
         </div>
         <div className="flex justify-between text-[11px] text-muted-foreground">
           <span>
             {m.rowsReplayed.toLocaleString('en-IN')} of {m.rowsTotal.toLocaleString('en-IN')} rows ({(progress * 100).toFixed(1)}%)
           </span>
-          <span>fraud window {dataset.fraudWindow[0].slice(11)} to {dataset.fraudWindow[1].slice(11)}</span>
+          <span>
+            {dataset.splits
+              ? `train days 0–5 · validation 6–7 · test 8–9 · ${m.ruleVersion ? `rules ${m.ruleVersion} · ` : ''}model threshold ${m.modelThreshold?.toFixed(2) ?? '—'}`
+              : `fraud window ${dataset.fraudWindow[0]?.slice(11) ?? '—'} to ${dataset.fraudWindow[1]?.slice(11) ?? '—'}`}
+          </span>
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-1">

@@ -1,0 +1,18 @@
+{
+  "dataset": "v2",
+  "checkpoint": "local_finetuned_gin_nolambur_v2.pt",
+  "checkpointSha": "2ec0033340787e98",
+  "bucketSeconds": 5.0,
+  "windowHours": 72.0,
+  "edges": 83067,
+  "batches": 60773,
+  "wallSeconds": 209.0,
+  "p50Ms": 2.93,
+  "p99Ms": 7.61,
+  "features": [
+    "HourOfDay",
+    "LogAmount",
+    "Payment Format"
+  ],
+  "createdAt": "2026-09-29T14:27:49"
+}

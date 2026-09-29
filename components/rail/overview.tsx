@@ -1,6 +1,6 @@
 'use client'
 
-import { Activity, ArrowRight, BookOpen, Briefcase, ListChecks, ScanSearch, CheckCircle2, CircleDashed, FlaskConical, History, Scale, Users, GitFork, Hourglass, Network, ScanEye, ShieldAlert, ShieldCheck, Zap } from 'lucide-react'
+import { Activity, ArrowRight, BookOpen, Briefcase, ListChecks, ScanSearch, CheckCircle2, CircleDashed, FlaskConical, History, Layers, Scale, Users, GitFork, Hourglass, Network, ScanEye, ShieldAlert, ShieldCheck, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -13,9 +13,20 @@ import { BackendGate, useWaitSeconds } from './BackendGate'
 import { GLOSSARY, Term, useCountUp, type TermKey } from './kit'
 import { MetricStrip } from './MetricStrip'
 
+/** The parts of /rail/evaluation (rail_engine.evaluate_temporal: test days only) this page shows. */
 type Evaluation = {
-  detectors: { accountLevel: { precision: number; recall: number }; combined: { precision: number; recall: number }; medianLeadSec: number | null; mulesInTransactions: number }
-  autoHold?: { accountsHeld: number; mulesHeld: number; fraudTotal: number; fraudBlocked: number; genuineBlocked: number; medianSecondsToHold: number | null }
+  evaluation: 'temporal'
+  detectors: {
+    accountLevel: { precision: number; recall: number; tp: number }
+    combined: { precision: number; recall: number; tp: number }
+    mulesActive: number
+    precisionAtK: { k: number; precision: number }[]
+    alertsPerAnalystPerDay: number
+    analysts: number
+    leadSeconds: { median: number | null; p10: number | null; n: number; alertedBeforeMoneyLeft: number }
+  }
+  policy: { fraudTotal: number; fraudStopped: number; innocentRestricted: number; innocentRestrictionHours: number; restrictedMules: number; restrictedAccounts: number }
+  test: { edges: number; positives: number }
   dataset: { rows: number; accounts: number; fraudRows: number }
 }
 
@@ -34,7 +45,8 @@ export function useEvaluationState() {
       .then(setLive)
       .catch(() => {})
   }, [backend, live])
-  const pre = (snapshot?.evaluation as Evaluation | undefined) ?? null
+  const saved = snapshot?.evaluation as Evaluation | undefined
+  const pre = saved?.evaluation === 'temporal' ? saved : null // an older (v1) snapshot has a different shape
   return { ev: live ?? pre, live: !!live, capturedAt: snapshot?.capturedAt ?? null }
 }
 
@@ -186,11 +198,11 @@ export function MuleChainExplainer() {
       title: 'Victims pay a stranger',
       body: (
         <>
-          Someone is talked into a big transfer (a fake investment, a &ldquo;digital arrest&rdquo;). They pay ₹4.5 lakh or more to an account they have never paid,
-          often in another state. That account is the first-layer <Term k="mule">mule</Term>.
+          Someone is talked into paying (a fake investment, a &ldquo;digital arrest&rdquo;). UPI caps a transfer at ₹1 lakh, so the money goes in several transfers,
+          often just under the cap and over more than one day, to an account they have never paid. That account is the first-layer <Term k="mule">mule</Term>.
         </>
       ),
-      detector: 'High-value inflow from new payers',
+      detector: 'Inflow burst from new payers · Structuring',
     },
     {
       n: 2,
@@ -198,9 +210,9 @@ export function MuleChainExplainer() {
       title: 'The mule forwards it fast',
       body: (
         <>
-          Within minutes most of it leaves again, split across several accounts. That is <Term k="pass-through">pass-through</Term>, and the gap before it is the{' '}
-          <Term k="lead time">lead time</Term>
-          {ev?.detectors.medianLeadSec != null ? `: ${duration(ev.detectors.medianLeadSec)} in this data (median).` : '.'}
+          Within minutes or hours most of it leaves again, split across several accounts. That is <Term k="pass-through">pass-through</Term>, and the gap between
+          the alert and the money leaving is the <Term k="lead time">lead time</Term>
+          {ev?.detectors.leadSeconds.median != null ? `: ${duration(ev.detectors.leadSeconds.median)} on the test days (median).` : '.'}
         </>
       ),
       detector: 'Rapid pass-through',
@@ -223,18 +235,19 @@ export function MuleChainExplainer() {
       title: 'Hold at the first account',
       body: (
         <>
-          A critical alert that the <Term k="gnn">GNN</Term> backs puts the account on <Term k="hold">hold</Term> at once. Everything downstream stops, then a
-          supervisor confirms the <Term k="freeze">freeze</Term> and files a <Term k="1930">1930</Term> report.
+          The response is graded: a high alert delays the account&apos;s settlements, a critical one holds its outgoing transfers, and a critical one the{' '}
+          <Term k="gnn">GNN</Term> backs with a second detector is a full <Term k="hold">hold</Term>. Every restriction lifts itself after a time limit unless a
+          supervisor confirms the <Term k="freeze">freeze</Term>, and the account holder can appeal.
         </>
       ),
-      detector: 'Auto-hold policy',
+      detector: 'Decision router',
     },
   ]
 
   const on = (n: number) => step === null || step === n
   return (
     <section id="how-it-works" className="scroll-mt-20 grid gap-4">
-      <SectionTitle icon={BookOpen} eyebrow="The 5-minute scam" title="How a mule chain moves money, and where we catch it">
+      <SectionTitle icon={BookOpen} eyebrow="The scam, step by step" title="How a mule chain moves money, and where we catch it">
         Hover or tap a step to see where it happens. This is an illustration of the pattern; every number elsewhere on the page comes from the engine.
       </SectionTitle>
       <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
@@ -364,48 +377,49 @@ export function MuleChainExplainer() {
 
 export function ProofPoints() {
   const { ev, live, capturedAt } = useEvaluationState()
+  const p10 = ev?.detectors.precisionAtK.find(p => p.k === 10)
   const cards = ev
     ? [
-        {
-          icon: ShieldAlert,
-          tone: 'text-brand-2 bg-brand-soft',
-          value: pct(ev.detectors.accountLevel.recall),
-          label: 'of mules caught by rules alone',
-          sub: `at ${pct(ev.detectors.accountLevel.precision)} precision`,
-          term: 'recall' as TermKey,
-        },
         {
           icon: Network,
           tone: 'text-brand-3 bg-teal-soft',
           value: pct(ev.detectors.combined.recall),
-          label: 'caught with the GNN\'s leads added',
-          sub: `precision holds at ${pct(ev.detectors.combined.precision)}`,
-          term: 'gnn' as TermKey,
+          label: 'of active mules caught, rules + GNN',
+          sub: `${pct(ev.detectors.combined.precision)} precision · rules alone ${pct(ev.detectors.accountLevel.recall)}`,
+          term: 'recall' as TermKey,
+        },
+        {
+          icon: ShieldAlert,
+          tone: 'text-brand-2 bg-brand-soft',
+          value: p10 ? pct(p10.precision) : '—',
+          label: 'of the first 10 queue alerts are mules',
+          sub: `${ev.detectors.alertsPerAnalystPerDay.toFixed(1)} alerts per analyst a day, team of ${ev.detectors.analysts}`,
+          term: 'precision' as TermKey,
         },
         {
           icon: Hourglass,
           tone: 'text-sev-medium bg-sev-medium-bg',
-          value: duration(ev.detectors.medianLeadSec),
+          value: duration(ev.detectors.leadSeconds.median),
           label: 'median warning before money moves',
-          sub: 'the window to freeze',
+          sub: `${ev.detectors.leadSeconds.alertedBeforeMoneyLeft} of ${ev.detectors.leadSeconds.n} alerted before any left`,
           term: 'lead time' as TermKey,
         },
-        ev.autoHold && {
+        {
           icon: ShieldCheck,
           tone: 'text-ok bg-ok-bg',
-          value: inrShort(ev.autoHold.fraudBlocked),
-          label: 'blocked by auto-hold alone',
-          sub: `${ev.autoHold.mulesHeld} of ${ev.autoHold.accountsHeld} held are mules · ${inr(ev.autoHold.genuineBlocked)} genuine`,
+          value: inrShort(ev.policy.fraudStopped),
+          label: 'of fraud stopped by graded holds alone',
+          sub: `${pct(ev.policy.fraudTotal ? ev.policy.fraudStopped / ev.policy.fraudTotal : null)} of ${inrShort(ev.policy.fraudTotal)} · ${ev.policy.innocentRestricted} innocent accounts restricted`,
           term: 'hold' as TermKey,
         },
-      ].filter(Boolean)
+      ]
     : []
   return (
     <section className="grid gap-4">
       <SectionTitle
         icon={FlaskConical}
         eyebrow="Measured, not claimed"
-        title="What the engine achieves on the full dataset"
+        title="What the engine achieves on days the model never saw"
         right={
           ev && (
             <span
@@ -418,8 +432,9 @@ export function ProofPoints() {
           )
         }
       >
-        The bridge replays all {ev ? ev.dataset.rows.toLocaleString('en-IN') : '30,353'} transactions with nobody acting and scores the detectors against the labels. Read
-        these with the note on the data just below. Details on the <Link href="/model" className="text-brand-2 underline underline-offset-2">model page</Link>.
+        The model trains on days 0–5 of {ev ? ev.dataset.rows.toLocaleString('en-IN') : 'the'} payments, picks its threshold on days 6–7, and these are days 8–9 only,
+        scored as they would be live: each payment sees only what came before it. Read them with the note on the data just below. Details and confidence intervals on
+        the <Link href="/model" className="text-brand-2 underline underline-offset-2">model page</Link>.
       </SectionTitle>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {!ev
@@ -447,10 +462,11 @@ export function ProofPoints() {
 // ---------------------------------------------------------------------------- detectors
 
 const DETECTOR_CARDS: { id: Detector; icon: typeof Zap; stage: string; pattern: string; rule: string; tone: string }[] = [
-  { id: 'high_value_new_payee', icon: Zap, stage: 'Stage 1', pattern: 'Victims pushed into large transfers', rule: '₹4.5 lakh or more, from a payer who has never paid this account, from another state.', tone: 'text-brand-2' },
-  { id: 'pass_through', icon: GitFork, stage: 'Stage 2', pattern: 'First-layer mules forwarding money', rule: 'Within 60 minutes, ₹2 lakh or more comes in and at least 60% of it leaves in two or more transfers.', tone: 'text-sev-high' },
-  { id: 'hop_from_flagged', icon: Network, stage: 'Stage 3', pattern: 'The next hop in the chain', rule: 'Money received from an account a rule flagged in the last 24 hours, or a frozen one. One hop only.', tone: 'text-sev-medium' },
-  { id: 'model_only', icon: ScanEye, stage: 'Anywhere', pattern: 'Structure the rules miss', rule: 'The GNN scores an inbound transfer 0.9 or higher and no rule has fired. A lead to check, not a finding.', tone: 'text-brand-3' },
+  { id: 'inflow_new_payers', icon: Zap, stage: 'Stage 1', pattern: 'Victims paying a stranger', rule: 'Money from first-time payers summed over 24 h (and 72 h), above ₹1.5 lakh or 3× the account’s own busiest recent day.', tone: 'text-brand-2' },
+  { id: 'structuring', icon: Layers, stage: 'Stage 1', pattern: 'Split under the UPI cap', rule: 'Three or more transfers in 24 h near the ₹1 lakh cap, or at just-under amounts like ₹49,999, from two or more payers.', tone: 'text-sev-critical' },
+  { id: 'pass_through', icon: GitFork, stage: 'Stage 2', pattern: 'Mules forwarding money', rule: '₹1 lakh+ in and 60%+ of it out again within 1, 6 or 24 h. Shops that always forward alert only at 3× their usual scale.', tone: 'text-sev-high' },
+  { id: 'hop_from_flagged', icon: Network, stage: 'Stage 3', pattern: 'The next hop in the chain', rule: 'Money received from an account a rule flagged in the last 24 hours, or a restricted one. One hop only.', tone: 'text-sev-medium' },
+  { id: 'model_only', icon: ScanEye, stage: 'Anywhere', pattern: 'Structure the rules miss', rule: 'The GNN scores an inbound transfer above the threshold picked on the validation days and no rule has fired. A lead, not a finding.', tone: 'text-brand-3' },
 ]
 
 export function DetectorCards() {
@@ -463,10 +479,11 @@ export function DetectorCards() {
   }, [alerts])
   return (
     <section className="grid gap-4">
-      <SectionTitle icon={ShieldAlert} eyebrow="Four detectors" title="What fires an alert">
-        Rules see only what a payment processor sees: amount, time, who paid whom, and their states. They never read the fraud labels.
+      <SectionTitle icon={ShieldAlert} eyebrow="Five detectors · rules r2.0" title="What fires an alert">
+        Rules see only what a payment processor sees: amount, time, channel, who paid whom, and each account&apos;s own history. They sum over windows, because UPI
+        caps a transfer at ₹1 lakh, and they never read the fraud labels.
       </SectionTitle>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {DETECTOR_CARDS.map((d, i) => (
           <div key={d.id} className={cn('enter flex flex-col rounded-lg border bg-card p-4 shadow-card', d.tone)} style={{ '--i': i } as React.CSSProperties}>
             <div className="flex items-center justify-between">
@@ -581,13 +598,13 @@ export function SectionTitle({ icon: Icon, eyebrow, title, children, right }: { 
 
 const STATUS = [
   { part: 'Transactions', state: 'Working', note: 'Live by default: payments arrive on the webhook, a Kafka topic or a Kinesis stream and are scored online. Offsets and checkpoints are committed only after the engine has processed a batch; bad messages go to a dead-letter table. Tested against a real Kafka broker and a Kinesis emulator, not production AWS. This public demo runs RAIL_SOURCE=replay over the synthetic dataset.' },
-  { part: 'GNN score on every row', state: 'Working', note: 'Trained GIN checkpoint, one full-graph pass at bridge start-up (about 30 s on CPU).' },
-  { part: 'Detectors, queue, lead time', state: 'Working', note: 'Multi-GNN/rail_engine.py. Detectors never read the fraud labels.' },
-  { part: 'Precision and recall', state: 'Working', note: 'Measured against nolambur_labels.csv, live in the console and for the full dataset on the model page.' },
-  { part: 'Agent investigation', state: 'Working', note: 'score_transfer_chain calls /predict live; the NPCI registry lookup is an HTTP call to a sandbox mock whose answer comes from the label.' },
-  { part: 'Automatic hold', state: 'Working', note: 'A critical alert the model scores 0.9+ holds the account at once; its transfers are blocked until a supervisor confirms or releases.' },
+  { part: 'GNN score on every payment', state: 'Working', note: 'Each payment is scored on its own 2-hop subgraph, using only earlier payments (infra/scorer.py). Verified equal to a full-graph pass to 1e-20; a cached mode trades exactness for speed.' },
+  { part: 'Detectors, queue, lead time', state: 'Working', note: 'Rules r2.0 sum over 1 h to 72 h windows with per-account baselines, because UPI caps a transfer at ₹1 lakh. Tests replay an adversary who splits and delays money, including what still slips through.' },
+  { part: 'Precision and recall', state: 'Working', note: 'Train on days 0–5, threshold from days 6–7, report days 8–9 only, with 95% intervals, precision@k and alerts per analyst. Synthetic data: shadow mode on real flows is the test that is still missing.' },
+  { part: 'Agent investigation', state: 'Working', note: 'Re-scores the alert\u2019s transfers on the current graph; the NPCI registry lookup is an HTTP call to a sandbox mock whose answer comes from the label.' },
+  { part: 'Graded actions and appeals', state: 'Working', note: 'A router maps rule and model evidence to alert only, delay settlement, hold outbound or full hold. Every restriction lifts after a time limit unless confirmed; appeals are recorded and must be decided in 24 h.' },
   { part: 'Freeze, 1930 report, SMS', state: 'Sandboxed', note: 'Real signed HTTP through a retrying outbox, to sandbox REST mocks of the bank gateway and 1930 portal. No real bank or CFCFRMS. SMS is real with Twilio keys.' },
-  { part: 'Roles and audit', state: 'Working', note: 'Analyst / supervisor / admin enforced by the bridge. Audit trail in SQLite or Postgres, append-only and hash-chained; /platform verifies it.' },
+  { part: 'Roles and audit', state: 'Working', note: 'Analyst / supervisor / admin enforced by the bridge. Append-only, hash-chained audit trail, verified on a real Postgres 16 with concurrent writers; /platform warns when it sits on an ephemeral disk.' },
   { part: 'Director / MCA linkage', state: 'Working, no data loaded', note: 'Onboarding takes a CIN and checks directors (disqualified, over the s.165 limit), common-control groups, registered-address farms and linked companies\u2019 flagged settlement VPAs. Loads real MCA / data.gov.in files or a vendor API; the demo ships with an empty registry.' },
 ]
 
@@ -663,30 +680,41 @@ export function OverviewPage() {
 
 /**
  * The skeptic's question, answered before it is asked. Generator facts are from
- * Multi-GNN/nolambur_synthetic_gen.py (seed 42); counts come from the evaluation.
+ * Multi-GNN/nolambur_v2_gen.py (seed 7); counts come from the evaluation.
  */
 export function DataHonesty() {
   const ev = useEvaluation()
-  const fraudRows = ev?.dataset.fraudRows ?? 353
-  const rows = ev?.dataset.rows ?? 30353
+  const fraudRows = ev?.dataset.fraudRows ?? 419
+  const rows = ev?.dataset.rows ?? 83067
   const checks: { ok: boolean; title: string; body: React.ReactNode }[] = [
     {
       ok: true,
-      title: 'No detector reads a label',
+      title: 'Trained on the past, tested on the future',
       body: (
         <>
-          The four rules, the auto-hold and the GNN see only what a payment processor sees. The GNN&apos;s inputs are time, amount, currency and payment format: no
-          states, no roles. Labels are used only afterwards, to score them.
+          The GIN learns from days 0–5, its alert threshold is picked on days 6–7, and every headline number is from days 8–9: two scam campaigns it never saw. The
+          earlier dataset could not do this (all its fraud fell in one five-minute window), which is why it was replaced.
+        </>
+      ),
+    },
+    {
+      ok: true,
+      title: 'Scored the way production would score',
+      body: (
+        <>
+          Each payment is scored on its own 2-hop neighbourhood using only payments that came before it. The model&apos;s inputs are time of day, amount and channel:
+          no absolute timestamps to memorise an attack by, no states, no labels.
         </>
       ),
     },
     {
       ok: false,
-      title: 'But the rules were written knowing the recipe',
+      title: 'Still synthetic, and still easier than real traffic',
       body: (
         <>
-          The ₹4.5 lakh threshold sits in the empty gap between clean payments (at most ₹2 lakh) and scam payments (at least ₹5 lakh), and the mules live in states
-          no clean account uses. On this data the rules are fitted to the answer. That is why precision is so high.
+          Clean payments here are mostly small (median around ₹600) while scam transfers run ₹10,000–₹1 lakh, so amount still carries much of the signal. The rules
+          were written by someone who knew how the generator works. Real precision will be lower; the test set is small (tens of mules), so the model page shows 95%
+          intervals.
         </>
       ),
     },
@@ -695,47 +723,44 @@ export function DataHonesty() {
       title: 'The registry lookup is an oracle',
       body: 'The mock NPCI registry answers from the label. It appears only in the investigation panel; no detector, hold or metric uses it.',
     },
-    {
-      ok: false,
-      title: 'The model is tested on the same event',
-      body: 'Training and test edges are random picks from the same five-minute incident, so the GNN\'s F1 of 1.00 measures fit, not how it would do on a new scam.',
-    },
   ]
 
   return (
     <section className="grid gap-4">
-      <SectionTitle icon={Scale} eyebrow="Read this before the numbers" title="Where the data comes from, and why the numbers aren't circular">
+      <SectionTitle icon={Scale} eyebrow="Read this before the numbers" title="Where the data comes from, and what the numbers can and cannot claim">
         Every account and payment here is synthetic. This is exactly how it was made, and what that means for the figures above.
       </SectionTitle>
       <div className="grid gap-3 lg:grid-cols-[1fr_1.35fr]">
         <div className="rounded-lg border bg-card p-4 shadow-card">
           <p className="text-[13.5px] font-semibold">How the dataset was generated</p>
           <p className="text-[11.5px] text-muted-foreground">
-            <code className="font-mono">Multi-GNN/nolambur_synthetic_gen.py</code>, fixed random seed, modelled on the Nolambur &ldquo;digital arrest&rdquo; case
+            <code className="font-mono">Multi-GNN/nolambur_v2_gen.py</code>, fixed seed, modelled on &ldquo;digital arrest&rdquo; mule networks
           </p>
           <ol className="mt-3 grid gap-2.5 text-[13px] leading-relaxed">
             <li className="grid grid-cols-[22px_1fr] gap-2">
               <span className="grid size-5 place-items-center rounded-full bg-sev-critical-bg text-[11px] font-semibold text-sev-critical">1</span>
               <span>
-                <b>50 victims</b> in Tamil Nadu each pay 1–2 of <b>80 first-layer mules</b> in Uttarakhand or Rajasthan: <b>₹5–5.5 lakh</b>, all within 3 minutes of
-                10:30 on 15 March 2024.
+                <b>Ten campaigns over ten days.</b> Victims, ordinary account holders with their own history, pay first-layer mules in transfers of at most{' '}
+                <b>₹1 lakh</b> (the UPI P2P cap) and at most ₹1 lakh a day, often just under the cap.
               </span>
             </li>
             <li className="grid grid-cols-[22px_1fr] gap-2">
               <span className="grid size-5 place-items-center rounded-full bg-sev-critical-bg text-[11px] font-semibold text-sev-critical">2</span>
               <span>
-                Each mule forwards <b>₹80,000–2 lakh</b> to 2–5 of <b>300 second-layer mules</b>, 10–90 seconds after that burst ends.
+                Mules forward 75–97% on to second-layer mules, some within minutes and a third of them after hours; some second-layer accounts reappear in later
+                campaigns. Mules also shop and send small amounts like anyone else.
               </span>
             </li>
             <li className="grid grid-cols-[22px_1fr] gap-2">
               <span className="grid size-5 place-items-center rounded-full bg-muted text-[11px] font-semibold">3</span>
               <span>
-                Clean traffic: <b>30,000 payments</b> among 3,000 accounts in seven states, none of them where the mules are, <b>₹500–2 lakh</b>, spread over 72 hours.
+                Clean traffic from 5,200 people, 220 merchants and 70 small businesses that pass most of their takings to suppliers the same day, on a daily rhythm, with
+                rent and wages.
               </span>
             </li>
           </ol>
           <p className="mt-3 border-t pt-2 text-[12px] text-muted-foreground">
-            {fraudRows} scam rows in {rows.toLocaleString('en-IN')} ({((fraudRows / rows) * 100).toFixed(1)}%).
+            {fraudRows} scam payments in {rows.toLocaleString('en-IN')} ({((fraudRows / rows) * 100).toFixed(2)}%).
           </p>
         </div>
         <ul className="grid gap-2">
@@ -751,9 +776,8 @@ export function DataHonesty() {
         </ul>
       </div>
       <div className="rounded-lg border border-sev-medium/30 bg-sev-medium-bg/60 p-3.5 text-[13px] leading-relaxed">
-        <b>On real traffic, precision will be much lower.</b> Real scams vary their amounts, genuine ₹5 lakh payments happen, and mule accounts are aged and spread
-        their transfers out. What this project demonstrates is the pipeline: streaming, graph scoring, holds, audit and the analyst feedback loop. The thresholds would
-        have to be re-learned from real, labelled cases, which is the job the feedback loop is built for.
+        <b>The real test is shadow mode.</b> Run silently on one partner&apos;s anonymised flows, log what would have been flagged, and compare against the fraud
+        reports that come in later. That is the only evidence about real traffic; nothing on this page is.
       </div>
     </section>
   )

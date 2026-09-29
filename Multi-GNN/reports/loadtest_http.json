@@ -1,0 +1,73 @@
+{
+  "mode": "http",
+  "at": "2026-09-29T15:20:45",
+  "hardware": {
+    "python": "3.12.10",
+    "os": "Windows-11-10.0.26200-SP0",
+    "logicalCpus": 12,
+    "cpu": "12th Gen Intel(R) Core(TM) i7-1255U",
+    "ramGb": 15.7,
+    "torchThreads": 10
+  },
+  "seconds": 20.0,
+  "runs": [
+    {
+      "targetTps": 1000,
+      "shards": 10,
+      "sent": 20100,
+      "ingested": 20100,
+      "rejected429": 0,
+      "httpErrors": 0,
+      "offeredTps": 1005,
+      "ingestedTps": 976,
+      "httpMs": {
+        "p50": 6.4,
+        "p99": 128.3
+      },
+      "endToEndMs": {
+        "p50": 351.0,
+        "p99": 516.7,
+        "note": "sent -> counted in ingestedThisRun, sampled every 250 ms (so +-250 ms)"
+      }
+    },
+    {
+      "targetTps": 2000,
+      "shards": 20,
+      "sent": 40100,
+      "ingested": 40100,
+      "rejected429": 0,
+      "httpErrors": 0,
+      "offeredTps": 2003,
+      "ingestedTps": 1964,
+      "httpMs": {
+        "p50": 4.8,
+        "p99": 131.9
+      },
+      "endToEndMs": {
+        "p50": 356.8,
+        "p99": 674.2,
+        "note": "sent -> counted in ingestedThisRun, sampled every 250 ms (so +-250 ms)"
+      }
+    },
+    {
+      "targetTps": 5000,
+      "shards": 50,
+      "sent": 100200,
+      "ingested": 100200,
+      "rejected429": 0,
+      "httpErrors": 0,
+      "offeredTps": 5006,
+      "ingestedTps": 2561,
+      "httpMs": {
+        "p50": 5.3,
+        "p99": 339.1
+      },
+      "endToEndMs": {
+        "p50": 7190.7,
+        "p99": 18922.3,
+        "note": "sent -> counted in ingestedThisRun, sampled every 250 ms (so +-250 ms)"
+      }
+    }
+  ],
+  "bridge": "RAIL_SOURCE=webhook RAIL_SCORING=cached, fresh graph (no seeded history), SQLite store; load client on the same laptop"
+}

@@ -4,8 +4,8 @@
 //
 // Writes public/rail-snapshot.json: the bridge's /rail/status metrics and /rail/evaluation, verbatim,
 // plus where and when they were captured. The console labels everything from this file as a snapshot
-// and replaces it with live data as soon as the bridge answers. Capture after the replay has passed the
-// fraud window (10:30-10:35 on the first morning) so the numbers show the incident, not an empty start.
+// and replaces it with live data as soon as the bridge answers. Capture once the replay (RAIL_SOURCE=replay)
+// is a few days into the v2 data, so the numbers show campaigns, alerts and holds, not an empty start.
 
 import { writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -22,8 +22,8 @@ async function get(path) {
 const status = await get('/rail/status')
 if (status.status !== 'ready') throw new Error(`bridge is ${status.status}, not ready`)
 const evaluation = await get('/rail/evaluation')
-if (status.metrics.rowsReplayed < 600) {
-  console.warn(`warning: only ${status.metrics.rowsReplayed} rows replayed; the fraud window may not have played yet`)
+if (status.metrics.rowsReplayed < 20000) {
+  console.warn(`warning: only ${status.metrics.rowsReplayed} rows replayed; few campaigns have played yet`)
 }
 
 const snapshot = {

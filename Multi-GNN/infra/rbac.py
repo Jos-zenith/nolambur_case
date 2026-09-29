@@ -5,9 +5,10 @@ with RAIL_USERS='{"name": "role", ...}'). There is no login: this is authorisati
 not authentication. In production the header would be set by an auth proxy from a
 verified session, never by the browser.
 
-    analyst     clear, escalate, investigate, onboarding checks, replay speed / pause
-    supervisor  + freeze, file 1930 reports, notify officers, and model overrides:
-                clearing an alert the model scored >= 0.9, or releasing an automatic hold
+    analyst     clear, escalate, investigate, onboarding checks, replay speed / pause,
+                record an account holder's appeal
+    supervisor  + freeze, file 1930 reports, notify officers, decide appeals, and overrides:
+                clearing an alert the model flagged, or lifting a restriction
     admin       + restart / reset the engine, load MCA registry files
 """
 
@@ -21,9 +22,9 @@ from fastapi import Header, HTTPException
 ROLES = ("analyst", "supervisor", "admin")
 
 PERMISSIONS: dict[str, set[str]] = {
-    "analyst": {"clear", "escalate", "investigate", "onboarding", "control"},
-    "supervisor": {"clear", "escalate", "investigate", "onboarding", "control", "freeze", "file_1930_report", "notify", "override"},
-    "admin": {"clear", "escalate", "investigate", "onboarding", "control", "freeze", "file_1930_report", "notify", "override", "restart", "registry_import"},
+    "analyst": {"clear", "escalate", "investigate", "onboarding", "control", "appeal_record"},
+    "supervisor": {"clear", "escalate", "investigate", "onboarding", "control", "appeal_record", "freeze", "file_1930_report", "notify", "override", "appeal_decide"},
+    "admin": {"clear", "escalate", "investigate", "onboarding", "control", "appeal_record", "freeze", "file_1930_report", "notify", "override", "appeal_decide", "restart", "registry_import"},
 }
 
 OVERRIDE_SCORE = 0.9

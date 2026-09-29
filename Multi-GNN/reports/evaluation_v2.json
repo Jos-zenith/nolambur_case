@@ -1,0 +1,503 @@
+{
+  "dataset": {
+    "version": "v2",
+    "file": "nolambur_v2/transactions.csv",
+    "splits": {
+      "train": [
+        "2024-03-11T00:00:00",
+        "2024-03-17T00:00:00"
+      ],
+      "val": [
+        "2024-03-17T00:00:00",
+        "2024-03-19T00:00:00"
+      ],
+      "test": [
+        "2024-03-19T00:00:00",
+        "2024-03-21T00:00:00"
+      ]
+    },
+    "scores": "online and time-respecting (infra/scorer.py): each edge scored from edges up to its own 5-second bucket, 72-hour window",
+    "rows": 83067,
+    "accounts": 5680,
+    "fraudRows": 419,
+    "start": "2024-03-11T00:00:24",
+    "end": "2024-03-20T23:58:42",
+    "fraudWindow": [
+      "2024-03-11T10:09:03",
+      "2024-03-20T18:04:39"
+    ]
+  },
+  "evaluation": "temporal",
+  "split": {
+    "train": [
+      "2024-03-11T00:00:00+00:00",
+      "2024-03-17T00:00:00+00:00"
+    ],
+    "val": [
+      "2024-03-17T00:00:00+00:00",
+      "2024-03-19T00:00:00+00:00"
+    ],
+    "test": [
+      "2024-03-19T00:00:00+00:00",
+      "2024-03-21T00:00:00+00:00"
+    ]
+  },
+  "model": {
+    "architecture": "GINe (edge-feature GIN), 2 message-passing layers",
+    "checkpoint": "local_finetuned_gin_nolambur_v2.pt",
+    "checkpointBytes": 167293,
+    "checkpointModified": "2026-09-29T11:52",
+    "edgeFeatures": [
+      "HourOfDay",
+      "LogAmount",
+      "Payment Format"
+    ],
+    "training": "Finetune only, trained on the train days (0-5); threshold picked on the validation days (6-7).",
+    "scoring": "online and time-respecting (infra/scorer.py): each edge scored from edges up to its own 5-second bucket, 72-hour window"
+  },
+  "trainingLog": {
+    "epochs": [
+      {
+        "epoch": 1,
+        "train": 0.442,
+        "val": 0.3445,
+        "test": 0.3027
+      },
+      {
+        "epoch": 2,
+        "train": 0.6606,
+        "val": 0.9353,
+        "test": 0.9174
+      },
+      {
+        "epoch": 3,
+        "train": 0.788,
+        "val": 0.8235,
+        "test": 0.8421
+      },
+      {
+        "epoch": 4,
+        "train": 0.8455,
+        "val": 0.951,
+        "test": 0.9381
+      },
+      {
+        "epoch": 5,
+        "train": 0.8394,
+        "val": 0.9275,
+        "test": 0.9189
+      },
+      {
+        "epoch": 6,
+        "train": 0.8882,
+        "val": 0.8727,
+        "test": 0.9256
+      },
+      {
+        "epoch": 7,
+        "train": 0.7907,
+        "val": 0.8553,
+        "test": 0.873
+      },
+      {
+        "epoch": 8,
+        "train": 0.7382,
+        "val": 0.9404,
+        "test": 0.9483
+      },
+      {
+        "epoch": 9,
+        "train": 0.8882,
+        "val": 0.9583,
+        "test": 0.9464
+      },
+      {
+        "epoch": 10,
+        "train": 0.9048,
+        "val": 0.9722,
+        "test": 0.9464
+      },
+      {
+        "epoch": 11,
+        "train": 0.8067,
+        "val": 0.9067,
+        "test": 0.9474
+      },
+      {
+        "epoch": 12,
+        "train": 0.9134,
+        "val": 0.9379,
+        "test": 0.9174
+      }
+    ],
+    "test": {
+      "edges": 16301,
+      "positives": 57,
+      "flagged": 52,
+      "f1": 0.9174,
+      "precision": 0.9615,
+      "recall": 0.8772,
+      "loggedAt": "2026-09-29 11:52:41"
+    },
+    "lastEpochAt": "2026-09-29 11:52:28",
+    "runsInLog": 6,
+    "source": "logs/logs.log"
+  },
+  "test": {
+    "edges": 16301,
+    "positives": 57,
+    "rocAuc": 0.9994178687299387,
+    "averagePrecision": 0.9269624721214742,
+    "threshold": 0.86,
+    "thresholdSource": "max F1 on the validation days",
+    "validation": {
+      "tp": 57,
+      "fp": 5,
+      "fn": 15,
+      "precision": 0.9193548387096774,
+      "recall": 0.7916666666666666,
+      "f1": 0.8507462686567164,
+      "edges": 16398
+    },
+    "atThreshold": {
+      "threshold": 0.86,
+      "chosen": true,
+      "tp": 45,
+      "fp": 2,
+      "fn": 12,
+      "precision": 0.9574468085106383,
+      "recall": 0.7894736842105263,
+      "f1": 0.8653846153846154,
+      "precisionCi": [
+        0.8575,
+        0.9883
+      ],
+      "recallCi": [
+        0.6671,
+        0.8753
+      ]
+    },
+    "thresholds": [
+      {
+        "threshold": 0.3,
+        "chosen": false,
+        "tp": 50,
+        "fp": 11,
+        "fn": 7,
+        "precision": 0.819672131147541,
+        "recall": 0.8771929824561403,
+        "f1": 0.8474576271186439
+      },
+      {
+        "threshold": 0.5,
+        "chosen": false,
+        "tp": 48,
+        "fp": 6,
+        "fn": 9,
+        "precision": 0.8888888888888888,
+        "recall": 0.8421052631578947,
+        "f1": 0.8648648648648649
+      },
+      {
+        "threshold": 0.7,
+        "chosen": false,
+        "tp": 48,
+        "fp": 5,
+        "fn": 9,
+        "precision": 0.9056603773584906,
+        "recall": 0.8421052631578947,
+        "f1": 0.8727272727272727
+      },
+      {
+        "threshold": 0.86,
+        "chosen": true,
+        "tp": 45,
+        "fp": 2,
+        "fn": 12,
+        "precision": 0.9574468085106383,
+        "recall": 0.7894736842105263,
+        "f1": 0.8653846153846154
+      },
+      {
+        "threshold": 0.9,
+        "chosen": false,
+        "tp": 45,
+        "fp": 2,
+        "fn": 12,
+        "precision": 0.9574468085106383,
+        "recall": 0.7894736842105263,
+        "f1": 0.8653846153846154
+      },
+      {
+        "threshold": 0.95,
+        "chosen": false,
+        "tp": 39,
+        "fp": 2,
+        "fn": 18,
+        "precision": 0.9512195121951219,
+        "recall": 0.6842105263157895,
+        "f1": 0.7959183673469389
+      }
+    ],
+    "precisionAtK": [
+      {
+        "k": 25,
+        "precision": 1.0
+      },
+      {
+        "k": 50,
+        "precision": 0.94
+      },
+      {
+        "k": 100,
+        "precision": 0.55
+      },
+      {
+        "k": 200,
+        "precision": 0.28
+      }
+    ],
+    "flaggedPerDay": 23.5,
+    "perLayer": [
+      {
+        "layer": "L0\u2192L1",
+        "rows": 14,
+        "flagged": 10,
+        "amountMedian": 51186.5,
+        "amountMax": 100000.0
+      },
+      {
+        "layer": "L1\u2192L2",
+        "rows": 32,
+        "flagged": 29,
+        "amountMedian": 19075.5,
+        "amountMax": 42813.0
+      },
+      {
+        "layer": "L2\u2192L2",
+        "rows": 11,
+        "flagged": 6,
+        "amountMedian": 10019.0,
+        "amountMax": 29822.0
+      },
+      {
+        "layer": "clean",
+        "rows": 16244,
+        "flagged": 2,
+        "amountMedian": 610.5,
+        "amountMax": 67306.0
+      }
+    ],
+    "histogram": [
+      {
+        "bin": "0.0\u20130.1",
+        "fraud": 4,
+        "clean": 16225
+      },
+      {
+        "bin": "0.1\u20130.2",
+        "fraud": 1,
+        "clean": 4
+      },
+      {
+        "bin": "0.2\u20130.3",
+        "fraud": 2,
+        "clean": 4
+      },
+      {
+        "bin": "0.3\u20130.4",
+        "fraud": 0,
+        "clean": 1
+      },
+      {
+        "bin": "0.4\u20130.5",
+        "fraud": 2,
+        "clean": 4
+      },
+      {
+        "bin": "0.5\u20130.6",
+        "fraud": 0,
+        "clean": 0
+      },
+      {
+        "bin": "0.6\u20130.7",
+        "fraud": 0,
+        "clean": 1
+      },
+      {
+        "bin": "0.7\u20130.8",
+        "fraud": 1,
+        "clean": 2
+      },
+      {
+        "bin": "0.8\u20130.9",
+        "fraud": 2,
+        "clean": 1
+      },
+      {
+        "bin": "0.9\u20131.0",
+        "fraud": 45,
+        "clean": 2
+      }
+    ]
+  },
+  "detectors": {
+    "window": "test days only",
+    "accountLevel": {
+      "tp": 15,
+      "fp": 7,
+      "fn": 11,
+      "precision": 0.6818181818181818,
+      "recall": 0.5769230769230769,
+      "f1": 0.6249999999999999,
+      "precisionCi": [
+        0.4732,
+        0.8364
+      ],
+      "recallCi": [
+        0.3895,
+        0.7446
+      ]
+    },
+    "combined": {
+      "tp": 20,
+      "fp": 9,
+      "fn": 6,
+      "precision": 0.6896551724137931,
+      "recall": 0.7692307692307693,
+      "f1": 0.7272727272727274,
+      "precisionCi": [
+        0.5077,
+        0.8272
+      ],
+      "recallCi": [
+        0.5795,
+        0.8897
+      ]
+    },
+    "modelOnlyAccounts": 14,
+    "modelOnlyMules": 12,
+    "mulesActive": 26,
+    "byDetector": [
+      {
+        "detector": "inflow_new_payers",
+        "label": "Inflow burst from new payers",
+        "alerts": 1,
+        "mules": 1,
+        "precision": 1.0
+      },
+      {
+        "detector": "pass_through",
+        "label": "Rapid pass-through",
+        "alerts": 5,
+        "mules": 5,
+        "precision": 1.0
+      },
+      {
+        "detector": "structuring",
+        "label": "Transfers split under the UPI cap",
+        "alerts": 0,
+        "mules": 0,
+        "precision": null
+      },
+      {
+        "detector": "hop_from_flagged",
+        "label": "Funds from a flagged account",
+        "alerts": 17,
+        "mules": 10,
+        "precision": 0.5882352941176471
+      },
+      {
+        "detector": "model_only",
+        "label": "Model-only flag",
+        "alerts": 14,
+        "mules": 12,
+        "precision": 0.8571428571428571
+      }
+    ],
+    "precisionAtK": [
+      {
+        "k": 5,
+        "precision": 1.0
+      },
+      {
+        "k": 10,
+        "precision": 1.0
+      },
+      {
+        "k": 20,
+        "precision": 0.75
+      }
+    ],
+    "alertsPerDay": 14.5,
+    "analysts": 2,
+    "alertsPerAnalystPerDay": 7.25,
+    "leadSeconds": {
+      "n": 13,
+      "median": 11366.0,
+      "p10": -1495.9999999999998,
+      "p90": 700294.0,
+      "alertedBeforeMoneyLeft": 10,
+      "note": "first time fraud money left a mule minus its first alert; negative = alerted after"
+    },
+    "secondsToAlert": {
+      "n": 24,
+      "median": 0.0,
+      "p90": 2762.7999999999993,
+      "note": "first fraud inflow to a mule until its first alert"
+    },
+    "ruleVersion": "r2.0"
+  },
+  "policy": {
+    "ladder": [
+      {
+        "level": 0,
+        "action": "alert_only",
+        "label": "Alert only",
+        "limitHours": null
+      },
+      {
+        "level": 1,
+        "action": "delay_settlement",
+        "label": "Delay settlement",
+        "limitHours": 1.0
+      },
+      {
+        "level": 2,
+        "action": "hold_outbound",
+        "label": "Hold outbound transfers",
+        "limitHours": 24.0
+      },
+      {
+        "level": 3,
+        "action": "full_hold",
+        "label": "Full hold pending supervisor",
+        "limitHours": 72.0
+      }
+    ],
+    "appealSlaHours": 24.0,
+    "fraudTotal": 1658542.0,
+    "fraudBlocked": 276261.0,
+    "fraudRecoveredFromDelay": 0,
+    "fraudStopped": 276261.0,
+    "fraudLost": 1382281.0,
+    "genuineBlocked": 6640.0,
+    "genuineDelayedThenReleased": 0,
+    "restrictions": {
+      "delay_settlement": 0,
+      "hold_outbound": 4,
+      "full_hold": 0
+    },
+    "restrictedAccounts": 4,
+    "restrictedMules": 4,
+    "innocentRestricted": 0,
+    "innocentRestrictionHours": 0,
+    "lifted": {
+      "restriction_expired": 4,
+      "appeal_sla_release": 0,
+      "cleared": 0,
+      "frozen": 0
+    },
+    "note": "Test days, replay with nobody acting except the router. Blocked = never sent; recovered = delayed, then cancelled when the restriction escalated. Money stopped is an estimate of loss avoided; it ignores recovery through the banks."
+  }
+}

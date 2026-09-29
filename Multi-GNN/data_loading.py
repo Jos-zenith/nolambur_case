@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 import torch
@@ -5,6 +6,15 @@ import logging
 import itertools
 from pathlib import Path
 from data_util import GraphData, HeteroData, z_norm, create_hetero_obj
+
+def add_derived_edge_features(df_edges, edge_features):
+    """HourOfDay and LogAmount, computed the same way at training and serving time."""
+    if 'HourOfDay' in edge_features:
+        df_edges['HourOfDay'] = (df_edges['Timestamp'] % 86400) / 3600.0
+    if 'LogAmount' in edge_features:
+        df_edges['LogAmount'] = np.log1p(df_edges['Amount Received'].astype(float))
+    return df_edges
+
 
 def get_data(args, data_config):
     '''Loads the AML transaction data.
@@ -48,6 +58,11 @@ def get_data(args, data_config):
 
     logging.info(f'Available Edge Features: {df_edges.columns.tolist()}')
 
+    # derived features come from the raw clock (before the shift below), as serving computes them
+    edge_features = ['Timestamp', 'Amount Received', 'Received Currency', 'Payment Format']
+    if os.getenv("NOLAMBUR_EDGE_FEATURES"):
+        edge_features = [f.strip() for f in os.environ["NOLAMBUR_EDGE_FEATURES"].split(",") if f.strip()]
+    df_edges = add_derived_edge_features(df_edges, edge_features)
     df_edges['Timestamp'] = df_edges['Timestamp'] - df_edges['Timestamp'].min()
 
     max_n_id = df_edges.loc[:, ['from_id', 'to_id']].to_numpy().max() + 1
@@ -59,7 +74,10 @@ def get_data(args, data_config):
     logging.info(f"Number of nodes (holdings doing transcations) = {df_nodes.shape[0]}")
     logging.info(f"Number of transactions = {df_edges.shape[0]}")
 
-    edge_features = ['Timestamp', 'Amount Received', 'Received Currency', 'Payment Format']
+    # NOLAMBUR_EDGE_FEATURES (read above) overrides the edge features. Derived columns:
+    # HourOfDay (time of day: shift-invariant, unlike the absolute Timestamp a model can
+    # memorise an attack by) and LogAmount. The list is saved next to the checkpoint so
+    # serving builds the same inputs.
     node_features = ['Feature']
 
     logging.info(f'Edge features being used: {edge_features}')
@@ -189,6 +207,7 @@ def get_data(args, data_config):
     if tr_data.edge_attr is not None:
         tr_data.edge_attr_mean = tr_data.edge_attr.mean(0).detach().clone()
         tr_data.edge_attr_std = tr_data.edge_attr.std(0).detach().clone()
+    tr_data.edge_feature_names = list(edge_features)
 
     tr_data.x = val_data.x = te_data.x = z_norm(tr_data.x) if tr_data.x is not None else None
     if not args.model == 'rgcn':

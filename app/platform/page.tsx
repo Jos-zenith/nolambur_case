@@ -173,6 +173,30 @@ export default function PlatformPage() {
             </Card>
           </div>
 
+          {p.scoring && (
+            <div className="grid gap-3 md:grid-cols-2">
+              <Card title="GNN scoring" backend={p.scoring.scoringMode ?? 'v1'} ok={true}>
+                <Row k="Method" v={p.scoring.mode} mono={false} />
+                {p.scoring.windowHours !== undefined && (
+                  <Row k="Graph in memory" v={`${(p.scoring.edgesInWindow ?? 0).toLocaleString('en-IN')} edges in a ${p.scoring.windowHours} h window · ${(p.scoring.nodes ?? 0).toLocaleString('en-IN')} accounts`} />
+                )}
+                {p.scoring.features && <Row k="Features" v={p.scoring.features.join(', ')} />}
+                <Row
+                  k="Exact"
+                  v={p.scoring.exact ? 'yes: same score as a full-graph pass' : p.scoring.scoringMode === 'cached' ? `no: neighbours' embeddings up to ${p.scoring.refreshSeconds} s old` : '—'}
+                  mono={false}
+                />
+                <Row k="Live batches scored" v={`${p.scoring.batches ?? 0}${p.scoring.lastMs != null ? ` · last ${p.scoring.lastMs} ms, ${p.scoring.lastSubgraphEdges} edges` : ''}`} />
+                {p.scoring.threshold && <Row k="Alert threshold" v={`${p.scoring.threshold.threshold.toFixed(2)} · ${p.scoring.threshold.source}`} mono={false} />}
+              </Card>
+              {p.store.warning ? (
+                <Card title="Audit durability" backend={p.store.backend ?? 'none'} ok={false}>
+                  <Row k="Warning" v={<span className="text-sev-critical">{p.store.warning}</span>} mono={false} />
+                </Card>
+              ) : null}
+            </div>
+          )}
+
           {p.registry && (
             <div className="grid gap-3 md:grid-cols-2">
               <Card title="Company registry (MCA)" backend={p.registry.provider?.mode === 'http' ? 'files + api' : 'files'} ok={!p.registry.error && !p.registry.provider?.lastError}>

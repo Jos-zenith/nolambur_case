@@ -1,0 +1,123 @@
+{
+  "mode": "engine",
+  "at": "2026-09-29T15:17:41",
+  "hardware": {
+    "python": "3.12.10",
+    "os": "Windows-11-10.0.26200-SP0",
+    "logicalCpus": 12,
+    "cpu": "12th Gen Intel(R) Core(TM) i7-1255U",
+    "ramGb": 15.7,
+    "torchThreads": 10
+  },
+  "seconds": 20.0,
+  "runs": [
+    {
+      "targetTps": 1000,
+      "scoring": "cached",
+      "refreshSeconds": 300.0,
+      "cacheRefreshes": 1,
+      "lastRefreshMs": 164.9,
+      "shards": 10,
+      "accounts": 55558,
+      "seededEdges": 244770,
+      "batchPerTick": 500,
+      "ticks": 40,
+      "graphEdges": 274770,
+      "sustainedTps": 6151,
+      "keepsUp": true,
+      "p99WithinTick": true,
+      "tickMs": {
+        "p50": 71.5,
+        "p99": 175.2,
+        "max": 213.8
+      },
+      "scoreMs": {
+        "p50": 47.4,
+        "p99": 81.6
+      },
+      "rulesMs": {
+        "p50": 21.6,
+        "p99": 105.0
+      },
+      "paymentLatencyMs": {
+        "p50": 321.5,
+        "p99": 425.2,
+        "note": "half a tick of batching (250 ms) plus the batch's processing time"
+      },
+      "medianSubgraphEdges": 39488,
+      "alerts": 72
+    },
+    {
+      "targetTps": 2000,
+      "scoring": "cached",
+      "refreshSeconds": 300.0,
+      "cacheRefreshes": 1,
+      "lastRefreshMs": 353.1,
+      "shards": 20,
+      "accounts": 111046,
+      "seededEdges": 489540,
+      "batchPerTick": 1000,
+      "ticks": 40,
+      "graphEdges": 549540,
+      "sustainedTps": 4933,
+      "keepsUp": true,
+      "p99WithinTick": true,
+      "tickMs": {
+        "p50": 177.9,
+        "p99": 230.8,
+        "max": 238.0
+      },
+      "scoreMs": {
+        "p50": 112.4,
+        "p99": 155.3
+      },
+      "rulesMs": {
+        "p50": 66.3,
+        "p99": 78.5
+      },
+      "paymentLatencyMs": {
+        "p50": 427.9,
+        "p99": 480.8,
+        "note": "half a tick of batching (250 ms) plus the batch's processing time"
+      },
+      "medianSubgraphEdges": 79215,
+      "alerts": 133
+    },
+    {
+      "targetTps": 5000,
+      "scoring": "cached",
+      "refreshSeconds": 300.0,
+      "cacheRefreshes": 1,
+      "lastRefreshMs": 969.5,
+      "shards": 50,
+      "accounts": 277651,
+      "seededEdges": 1223850,
+      "batchPerTick": 2500,
+      "ticks": 40,
+      "graphEdges": 1373850,
+      "sustainedTps": 5395,
+      "keepsUp": true,
+      "p99WithinTick": false,
+      "tickMs": {
+        "p50": 423.9,
+        "p99": 698.2,
+        "max": 703.8
+      },
+      "scoreMs": {
+        "p50": 284.0,
+        "p99": 342.6
+      },
+      "rulesMs": {
+        "p50": 132.8,
+        "p99": 375.3
+      },
+      "paymentLatencyMs": {
+        "p50": 673.9,
+        "p99": 948.2,
+        "note": "half a tick of batching (250 ms) plus the batch's processing time"
+      },
+      "medianSubgraphEdges": 196346,
+      "alerts": 366
+    }
+  ]
+}

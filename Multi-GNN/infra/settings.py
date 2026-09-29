@@ -33,7 +33,12 @@ runs on this machine with no extra services.
     GATEWAY_WEBHOOK_SECRET HMAC key for those webhooks; default "sandbox-secret"
     CFCFRMS_URL            1930 portal base URL; default is the bridge's own mock portal
     NPCI_REGISTRY_URL      suspect-registry base URL; default is the bridge's own mock registry
-    RAIL_AUTO_HOLD         on (default) | off: hold accounts on critical alerts the model also scores >= 0.9
+    NOLAMBUR_DATASET       v2 (default) | v1: which dataset the engine replays and evaluates on
+    RAIL_AUTO_HOLD         on (default) | off: the decision router applies graded restrictions (off = alert only)
+    RAIL_ANALYSTS          default 2: team size for the alerts-per-analyst-per-day figure
+    RAIL_SCORING           exact (default) | cached: live GNN scoring (infra/scorer.py); cached is ~3x faster
+                           under load and within 0.02 of exact on v2 (reports/scorer_compare.json)
+    RAIL_SCORING_REFRESH   cached mode: event-time seconds between embedding refreshes (default 300)
     BRIDGE_PUBLIC_URL      how the outbox reaches the bridge; default http://127.0.0.1:<GNN_PORT or 8001>
 """
 
@@ -82,7 +87,17 @@ NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
 NEO4J_NAMESPACE = os.getenv("NEO4J_NAMESPACE", "nolambur")
 
-RAIL_DB_URL = os.getenv("RAIL_DB_URL", f"sqlite:///{(DATA_DIR / 'rail.db').as_posix()}")
+def _db_url(url: str) -> str:
+    """Hosts hand out postgres:// or postgresql:// URLs; SQLAlchemy needs the psycopg driver named."""
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
+
+
+RAIL_DB_URL = _db_url(os.getenv("RAIL_DB_URL") or os.getenv("DATABASE_URL") or f"sqlite:///{(DATA_DIR / 'rail.db').as_posix()}")
+# Render (and most PaaS) disks are wiped on redeploy: SQLite there loses the audit trail.
+EPHEMERAL_DISK = bool(os.getenv("RENDER") or os.getenv("DYNO") or os.getenv("K_SERVICE"))
 
 GATEWAY_WEBHOOK_URL = os.getenv("GATEWAY_WEBHOOK_URL", f"{BRIDGE_PUBLIC_URL}/sandbox/gateway/webhooks")
 GATEWAY_WEBHOOK_SECRET = os.getenv("GATEWAY_WEBHOOK_SECRET", "sandbox-secret")
@@ -92,6 +107,10 @@ NPCI_REGISTRY_URL = os.getenv("NPCI_REGISTRY_URL", f"{BRIDGE_PUBLIC_URL}/sandbox
 MCA_PROVIDER = os.getenv("MCA_PROVIDER", "none").lower()
 MCA_API_URL = os.getenv("MCA_API_URL", "").rstrip("/")
 MCA_API_KEY = os.getenv("MCA_API_KEY", "")
+
+NOLAMBUR_DATASET = os.getenv("NOLAMBUR_DATASET", "v2").lower()
+RAIL_SCORING = os.getenv("RAIL_SCORING", "exact").lower()  # exact | cached (layer-1 embeddings refreshed every RAIL_SCORING_REFRESH s)
+RAIL_SCORING_REFRESH = float(os.getenv("RAIL_SCORING_REFRESH", "300"))  # v2: 10 days, temporal split; v1: the original 3-day file
 
 RAIL_AUTO_HOLD = os.getenv("RAIL_AUTO_HOLD", "on").lower() not in ("off", "0", "false", "no")
 

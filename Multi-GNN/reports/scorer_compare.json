@@ -1,0 +1,37 @@
+{
+  "what": "cached layer-1 embeddings vs exact 2-hop scoring, same time-respecting 5-second batches over all of v2",
+  "runs": [
+    {
+      "dataset": "v2",
+      "refreshSeconds": 60.0,
+      "edges": 83067,
+      "maxAbsDiff": 0.006671160459518433,
+      "meanAbsDiff": 4.281664573974584e-07,
+      "p99AbsDiff": 8.492245342494304e-09,
+      "fraudMeanAbsDiff": 5.27088429227578e-09,
+      "labelFlipsAt0_5": 0,
+      "exactMsP50": 4.12,
+      "cachedMsP50": 4.32,
+      "exactMsP99": 14.34,
+      "cachedMsP99": 11.96,
+      "cacheRefreshes": 10617,
+      "lastRefreshMs": 11.130600003525615
+    },
+    {
+      "dataset": "v2",
+      "refreshSeconds": 300.0,
+      "edges": 83067,
+      "maxAbsDiff": 0.019592255353927612,
+      "meanAbsDiff": 2.1071532428110416e-06,
+      "p99AbsDiff": 5.960464477539063e-08,
+      "fraudMeanAbsDiff": 3.427367399447778e-05,
+      "labelFlipsAt0_5": 0,
+      "exactMsP50": 1.92,
+      "cachedMsP50": 2.26,
+      "exactMsP99": 6.99,
+      "cachedMsP99": 6.27,
+      "cacheRefreshes": 2609,
+      "lastRefreshMs": 10.32649993430823
+    }
+  ]
+}

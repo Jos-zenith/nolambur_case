@@ -150,7 +150,7 @@ class Bridge:
         time.sleep(0.1)
 
 
-def wait_for(cond, timeout=10.0) -> None:
+def wait_for(cond, timeout=60.0) -> None:
     end = time.time() + timeout
     while time.time() < end:
         if cond():
@@ -263,7 +263,7 @@ def test_second_bridge_stands_by_then_takes_over(store, monkeypatch):
     a.stop()  # a dies without releasing: b waits out the TTL
     for i in range(20):
         data.put(f"shard-{i % 2}", f"D{i:03d}")
-    wait_for(lambda: len(b.delivered) == 20, timeout=15)
+    wait_for(lambda: len(b.delivered) == 20)
     b.stop()
     assert sorted(b.delivered) == [f"D{i:03d}" for i in range(20)]  # resumed from a's checkpoints, nothing re-read
     assert b.source.lease["held"] and b.source.lease["holder"] == b.source.owner

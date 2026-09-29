@@ -6,9 +6,9 @@ import { toast } from 'sonner'
 
 import { duration, inr, rowLabel, stamp } from '@/lib/rail/format'
 import { railPost, useRail, useRoles } from '@/lib/rail/store'
-import type { AlertDetail as Detail, Downstream, Investigation } from '@/lib/rail/types'
+import type { AlertDetail as Detail, Downstream, Investigation, Restriction } from '@/lib/rail/types'
 import { cn } from '@/lib/utils'
-import { Lock, MessageSquareText } from 'lucide-react'
+import { Hourglass, Lock, MessageSquareText, Scale } from 'lucide-react'
 
 import { Callout } from './kit'
 import { MoneyTrail } from './MoneyTrail'
@@ -64,11 +64,7 @@ export function AlertDetail({ alertId, onSelect, showLabels }: { alertId: string
           </span>
         </div>
         <h2 className="mt-2 text-[18px] font-semibold leading-snug tracking-tight">{a.title}</h2>
-        {a.status === 'held' && (
-          <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-sev-critical px-2 py-1 text-[12px] font-medium text-white">
-            <Lock className="size-3.5" /> On hold: transfers to and from this account are blocked until a supervisor decides
-          </p>
-        )}
+        {p.held && <RestrictionBadge r={p.held} />}
         <p className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
           <span className="font-mono text-foreground">{a.vpa}</span>
           <span>
@@ -93,7 +89,9 @@ export function AlertDetail({ alertId, onSelect, showLabels }: { alertId: string
           </dl>
         </section>
 
-        <ActionBar alertId={a.id} status={a.status} caseId={a.caseId} gnnMax={a.gnnMax} />
+        {p.held && <RestrictionPanel r={p.held} alertId={a.id} onChange={load} />}
+
+        <ActionBar alertId={a.id} status={a.status} caseId={a.caseId} gnnMax={a.gnnMax} restricted={!!p.held} />
 
         <Investigate alertId={a.id} />
 
@@ -213,7 +211,7 @@ function Investigate({ alertId }: { alertId: string }) {
         <div>
           <h3 className="text-[13px] font-semibold">Agent investigation</h3>
           <p className="text-[12px] text-muted-foreground">
-            Runs <code className="font-mono">score_transfer_chain</code> (live <code className="font-mono">/predict</code>, spliced onto the real graph) and{' '}
+            Re-scores this account&apos;s transfers on the graph as it stands now (everything seen so far), next to the score each got on arrival, and runs{' '}
             <code className="font-mono">check_suspect_registry</code> from <code className="font-mono">agents/tools_impl.py</code>.
           </p>
         </div>
@@ -224,10 +222,10 @@ function Investigate({ alertId }: { alertId: string }) {
       {result && (
         <div className="grid gap-3 p-3">
           <p className="text-[12px] text-muted-foreground">
-            {result.scored.legs.length} legs scored in {result.seconds.toFixed(2)}s · {result.scored.linkedAccounts} accounts linked into the background graph ·
+            {result.scored.legs.length} transfers scored in {result.seconds.toFixed(2)}s · {result.scored.linkedAccounts} accounts already in the graph ·
             features {result.scored.normalized ? 'z-normalised with the checkpoint stats' : 'NOT normalised'}
           </p>
-          <Table head={['CSV row', 'Sender', 'Receiver', 'Amount', 'Full-graph score', 'Live /predict score']} right={[3]}>
+          <Table head={['Row', 'Sender', 'Receiver', 'Amount', 'Score on arrival', 'Score with hindsight']} right={[3]}>
             {result.legs.map((leg, i) => (
               <tr key={leg.row} className="border-b last:border-0">
                 <td className="py-1.5 pr-3 font-mono text-[12px]">#{leg.row}</td>
@@ -264,15 +262,15 @@ const ACTIONS = [
   { id: 'freeze', label: 'Freeze account', cls: 'bg-sev-critical text-white hover:opacity-90' },
 ] as const
 
-function ActionBar({ alertId, status, caseId, gnnMax }: { alertId: string; status: string; caseId: string | null; gnnMax: number }) {
+function ActionBar({ alertId, status, caseId, gnnMax, restricted }: { alertId: string; status: string; caseId: string | null; gnnMax: number; restricted: boolean }) {
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const { roles, role, can } = useRoles()
   useEffect(() => setNote(''), [alertId])
-  const overrideAt = roles?.overrideScore ?? 0.9
+  const overrideAt = useRail(s => s.metrics?.modelThreshold) ?? roles?.overrideScore ?? 0.9
   // Mirrors the bridge's check; the bridge is what actually enforces it.
-  const needs = (id: string) => (id === 'clear' && (status === 'held' || gnnMax >= overrideAt) ? 'override' : id)
-  const label = (id: string, fallback: string) => (id === 'clear' && status === 'held' ? 'Release hold' : id === 'freeze' && status === 'held' ? 'Confirm freeze' : fallback)
+  const needs = (id: string) => (id === 'clear' && (restricted || gnnMax >= overrideAt) ? 'override' : id)
+  const label = (id: string, fallback: string) => (id === 'clear' && restricted ? 'Lift restriction' : id === 'freeze' && restricted ? 'Confirm freeze' : fallback)
 
   const run = async (action: string) => {
     if (!note.trim()) return toast.error('Add a note first', { description: 'Every action is logged with its reason.' })
@@ -285,7 +283,7 @@ function ActionBar({ alertId, status, caseId, gnnMax }: { alertId: string; statu
       toast.success('Frozen: instruction queued to the bank gateway', {
         description: `${String(data.tool?.freeze_reference ?? '')} · outbox · ${data.alert.caseId}`,
       })
-    } else toast.success(action === 'clear' ? (status === 'held' ? 'Hold released' : 'Alert cleared') : `Filed to ${data.alert.caseId}`)
+    } else toast.success(action === 'clear' ? (restricted ? 'Restriction lifted' : 'Alert cleared') : `Filed to ${data.alert.caseId}`)
   }
 
   const done = status === 'cleared' || status === 'frozen' || status === 'superseded'
@@ -303,9 +301,6 @@ function ActionBar({ alertId, status, caseId, gnnMax }: { alertId: string; statu
         </p>
       ) : (
         <div className="flex flex-col gap-2 lg:flex-row lg:items-start">
-          {status === 'held' && (
-            <p className="text-[13px] lg:hidden">Held automatically. Transfers are blocked until a supervisor confirms or releases.</p>
-          )}
           <textarea
             value={note}
             onChange={e => setNote(e.target.value)}
@@ -334,15 +329,135 @@ function ActionBar({ alertId, status, caseId, gnnMax }: { alertId: string; statu
       )}
       {!done && (
         <p className="mt-2 text-[12px] text-muted-foreground">
-          {status === 'held' && <span className="hidden text-sev-critical lg:inline">Held automatically: transfers are blocked until a supervisor confirms or releases. </span>}
           {caseId && (
             <>
               Part of <Link href={`/cases/${caseId}`} className="text-primary underline underline-offset-2">{caseId}</Link>.{' '}
             </>
           )}
-          {role === 'analyst' && 'Freezing, and clearing anything the model scored 0.9 or higher, needs a supervisor.'}
+          {role === 'analyst' && `Freezing, lifting a restriction, and clearing anything the model scored ${overrideAt.toFixed(2)} or higher need a supervisor.`}
         </p>
       )}
+    </section>
+  )
+}
+
+const LEVEL_TONE = { 1: 'bg-sev-medium text-white', 2: 'bg-sev-high text-white', 3: 'bg-sev-critical text-white' } as const
+const LEVEL_EFFECT = {
+  1: 'outgoing transfers are delayed; they go through when it lifts, or are cancelled if it escalates',
+  2: 'outgoing transfers are blocked; money can still come in',
+  3: 'transfers in both directions are blocked',
+} as const
+
+function RestrictionBadge({ r }: { r: Restriction }) {
+  return (
+    <p className={cn('mt-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium', LEVEL_TONE[r.level])}>
+      <Lock className="size-3.5" /> Level {r.level} · {r.label}: {LEVEL_EFFECT[r.level]}
+    </p>
+  )
+}
+
+/** The graded restriction on this account: why, how long, and the account holder's appeal. */
+function RestrictionPanel({ r, alertId, onChange }: { r: Restriction; alertId: string; onChange: () => void }) {
+  const simT = useRail(s => s.metrics?.simT ?? 0)
+  const { can, role } = useRoles()
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const left = r.expiresT - simT
+  const appeal = r.appeal
+  const appealLeft = appeal ? appeal.dueT - simT : 0
+
+  const record = async () => {
+    if (!text.trim()) return toast.error("Paste the account holder's statement first")
+    setBusy(true)
+    const { ok, data } = await railPost(`alerts/${alertId}/appeal`, { statement: text })
+    setBusy(false)
+    if (!ok) return toast.error(data.error ?? 'Could not record the appeal')
+    setText('')
+    toast.success('Appeal recorded', { description: 'A supervisor must decide within the deadline, or the restriction lifts.' })
+    onChange()
+  }
+  const decide = async (decision: 'uphold' | 'release') => {
+    if (!text.trim()) return toast.error('Add a note for the decision')
+    setBusy(true)
+    const { ok, data } = await railPost(`alerts/${alertId}/appeal/decision`, { decision, note: text })
+    setBusy(false)
+    if (!ok) return toast.error(data.error ?? 'Could not decide the appeal')
+    setText('')
+    toast.success(decision === 'uphold' ? 'Appeal refused: restriction stays' : 'Appeal accepted: restriction lifted and alert cleared')
+    onChange()
+  }
+
+  return (
+    <section className="grid gap-3 rounded-lg border bg-background p-3">
+      <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-start">
+        <div>
+          <p className="flex items-center gap-2 text-[13.5px] font-semibold">
+            <Hourglass className="size-4 text-muted-foreground" />
+            {r.label}
+            <span className="rounded-full bg-muted px-2 text-[11.5px] font-normal text-muted-foreground">level {r.level} of 3</span>
+          </p>
+          <p className="mt-1 text-[12.5px] text-muted-foreground">
+            Set by the decision router: {r.policy}. Since {stamp(r.at)}.
+          </p>
+        </div>
+        <p className={cn('text-right text-[12.5px]', left < 3600 ? 'text-sev-high' : 'text-muted-foreground')}>
+          {left > 0 ? <>Lifts itself in <b className="font-mono">{duration(left)}</b></> : 'Lifting now'}
+          <span className="block text-[11.5px]">at {stamp(r.expiresT)} unless a supervisor confirms</span>
+        </p>
+      </div>
+      <ol className="flex flex-wrap gap-1 text-[11.5px]" aria-label="Action ladder">
+        {['Alert only', 'Delay settlement', 'Hold outbound', 'Full hold'].map((l, i) => (
+          <li key={l} className={cn('rounded-sm border px-2 py-0.5', i === r.level ? LEVEL_TONE[r.level as 1 | 2 | 3] + ' border-transparent' : i < r.level ? 'bg-muted text-muted-foreground' : 'text-muted-foreground')}>
+            {i}. {l}
+          </li>
+        ))}
+      </ol>
+      <div className="border-t pt-3">
+        <p className="flex items-center gap-2 text-[13px] font-medium">
+          <Scale className="size-4 text-muted-foreground" /> Appeal
+        </p>
+        {appeal ? (
+          <div className="mt-1.5 grid gap-1 text-[12.5px]">
+            <p>
+              <span className="text-muted-foreground">
+                {appeal.status === 'open' ? 'Open' : appeal.status === 'upheld' ? 'Refused' : appeal.status === 'released' ? 'Accepted' : 'Lapsed'} · recorded by {appeal.by} at{' '}
+                {stamp(appeal.at)}:
+              </span>{' '}
+              &ldquo;{appeal.statement}&rdquo;
+            </p>
+            {appeal.status === 'open' ? (
+              <p className={cn(appealLeft < 3 * 3600 ? 'text-sev-high' : 'text-muted-foreground')}>
+                Decision due in <b className="font-mono">{duration(Math.max(0, appealLeft))}</b>; if nobody decides, the restriction lifts.
+              </p>
+            ) : (
+              appeal.decidedBy && <p className="text-muted-foreground">Decided by {appeal.decidedBy}: {appeal.note}</p>
+            )}
+          </div>
+        ) : (
+          <p className="mt-1 text-[12.5px] text-muted-foreground">None. The account holder can appeal through support; record it here and the decision clock starts.</p>
+        )}
+        {(!appeal || appeal.status !== 'open') && can('appeal_record') && (
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+            <textarea value={text} onChange={e => setText(e.target.value)} rows={2} placeholder="The account holder's statement, as received by support"
+              className="min-h-[48px] flex-1 resize-y rounded-sm border bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-primary" />
+            <button onClick={record} disabled={busy} className="h-8 rounded-sm border px-3 text-[13px] hover:bg-accent disabled:opacity-40">Record appeal</button>
+          </div>
+        )}
+        {appeal?.status === 'open' && (
+          can('appeal_decide') ? (
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+              <textarea value={text} onChange={e => setText(e.target.value)} rows={2} placeholder="Reason for the decision (goes into the audit log)"
+                className="min-h-[48px] flex-1 resize-y rounded-sm border bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-primary" />
+              <div className="flex gap-2">
+                <button onClick={() => decide('release')} disabled={busy} className="h-8 rounded-sm bg-ok px-3 text-[13px] font-medium text-white disabled:opacity-40">Accept · lift</button>
+                <button onClick={() => decide('uphold')} disabled={busy} className="h-8 rounded-sm border px-3 text-[13px] hover:bg-accent disabled:opacity-40">Refuse · keep</button>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-[12px] text-muted-foreground">Deciding an appeal needs a supervisor. You are {role ?? 'not signed in'}.</p>
+          )
+        )}
+      </div>
     </section>
   )
 }

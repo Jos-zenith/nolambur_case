@@ -44,12 +44,15 @@ def main() -> None:
                                       description="Local finetune-only run on Nolambur data")
     parser.add_argument("--finetune-epochs", type=int, default=30,
                          help="Epochs for the (only) training stage (default: 30)")
+    parser.add_argument("--dataset", choices=["v1", "v2"], default="v1",
+                         help="v1: nolambur/ (random split: fraud sits in one 4.5-minute window); "
+                              "v2: nolambur_v2/ (day-based temporal split)")
     parser.add_argument("--loss-w-ce2", type=float, default=None,
                          help="Override the fraud-class loss weight instead of the config default "
                               "(150, tuned for IBM AML's 0.10%% imbalance). Default: auto-derive "
                               "inverse-frequency weight from the actual training split.")
     args = parser.parse_args()
-    args.data = "nolambur"
+    args.data = "nolambur_v2" if args.dataset == "v2" else "nolambur"
 
     with open(SCRIPT_DIR / "data_config.json", "r") as f:
         data_config = json.load(f)
@@ -73,7 +76,7 @@ def main() -> None:
 
     finetuner = TwoStageFinetuner(args, data_config)
 
-    tr, val, te, tr_inds, val_inds, te_inds = finetuner.load_and_prepare_data("FINETUNE", "nolambur")
+    tr, val, te, tr_inds, val_inds, te_inds = finetuner.load_and_prepare_data("FINETUNE", args.data)
 
     # model_settings.json's w_ce2=150 was tuned for IBM AML pretraining's much
     # more extreme 0.10% imbalance. Applied unchanged to Nolambur's ~1.16%
@@ -112,7 +115,7 @@ def main() -> None:
 
     save_dir = SCRIPT_DIR / (args.save_dir or "models")
     save_dir.mkdir(parents=True, exist_ok=True)
-    save_path = save_dir / f"local_finetuned_{args.model}_nolambur.pt"
+    save_path = save_dir / f"local_finetuned_{args.model}_{args.data}.pt"
     torch.save(model.state_dict(), save_path)
 
     # The model was trained on z-normalized edge features (see
@@ -121,13 +124,13 @@ def main() -> None:
     # split's per-column mean/std alongside it so the serving side
     # (bridge_api.py) can normalize incoming requests the same way, instead
     # of silently feeding the model raw-scale values it was never trained on.
-    norm_path = save_dir / f"local_finetuned_{args.model}_nolambur.norm.json"
+    norm_path = save_dir / f"local_finetuned_{args.model}_{args.data}.norm.json"
     edge_attr_mean = getattr(tr, "edge_attr_mean", None)
     edge_attr_std = getattr(tr, "edge_attr_std", None)
     if edge_attr_mean is not None and edge_attr_std is not None:
         with open(norm_path, "w") as f:
             json.dump({
-                "edge_features": ["Timestamp", "Amount Received", "Received Currency", "Payment Format"],
+                "edge_features": getattr(tr, "edge_feature_names", None) or ["Timestamp", "Amount Received", "Received Currency", "Payment Format"],
                 "edge_attr_mean": edge_attr_mean.tolist(),
                 "edge_attr_std": edge_attr_std.tolist(),
             }, f, indent=2)

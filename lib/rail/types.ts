@@ -3,7 +3,9 @@
 export type Severity = 'critical' | 'high' | 'medium' | 'low'
 export type AlertStatus = 'open' | 'held' | 'escalated' | 'frozen' | 'cleared' | 'superseded'
 export type RoleName = 'analyst' | 'supervisor' | 'admin'
-export type Detector = 'high_value_new_payee' | 'pass_through' | 'hop_from_flagged' | 'model_only'
+export type Detector = 'inflow_new_payers' | 'pass_through' | 'structuring' | 'hop_from_flagged' | 'model_only'
+/** The decision router's graded actions (rail_engine.LEVELS) */
+export type ActionLevel = 'alert_only' | 'delay_settlement' | 'hold_outbound' | 'full_hold'
 export type Role = 'victim' | 'l1_mule' | 'l2_mule' | 'clean' | 'unknown'
 
 export interface Row {
@@ -19,6 +21,9 @@ export interface Row {
   amount: number
   gnn: number
   blocked: boolean
+  /** held back by a delay-settlement restriction on the payer */
+  delayed?: boolean
+  channel?: 'P2P' | 'P2M'
   /** replay = a CSV row; webhook / kafka / kinesis = an ingested payment */
   source: 'replay' | 'webhook' | 'kafka' | 'kinesis'
   /** null for ingested payments: they carry no label */
@@ -46,7 +51,31 @@ export interface Alert {
   status: AlertStatus
   caseId: string | null
   leadSeconds: number | null
+  /** the router's level for this alert */
+  action?: ActionLevel
   truth: { role: Role; isMule: boolean }
+}
+
+/** A graded restriction on an account (rail_engine RailEngine.held) */
+export interface Restriction {
+  at: number
+  by: string
+  alertId: string
+  policy: string
+  level: 1 | 2 | 3
+  action: ActionLevel
+  label: string
+  expiresT: number
+  appeal: {
+    at: number
+    by: string
+    statement: string
+    dueT: number
+    status: 'open' | 'upheld' | 'released' | 'lapsed'
+    decidedBy?: string
+    decidedT?: number
+    note?: string
+  } | null
 }
 
 export interface Metrics {
@@ -71,8 +100,16 @@ export interface Metrics {
   mulesSeen: number
   mulesAlerted: number
   frozenAccounts: number
-  /** accounts on automatic hold (RAIL_AUTO_HOLD), awaiting a supervisor */
+  /** accounts at hold-outbound or full hold, awaiting a supervisor */
   heldAccounts: number
+  /** accounts whose outgoing transfers are delayed */
+  delayedAccounts?: number
+  restrictionsByLevel?: Record<'delay_settlement' | 'hold_outbound' | 'full_hold', number>
+  appealsOpen?: number
+  delayedAmount?: number
+  recoveredFraudAmount?: number
+  modelThreshold?: number
+  ruleVersion?: string
   autoHold: boolean
   blockedFraudAmount: number
   blockedGenuineAmount: number
@@ -103,13 +140,16 @@ export interface Case {
 }
 
 export interface DatasetFacts {
+  version?: 'v1' | 'v2'
+  splits?: Record<'train' | 'val' | 'test', [string, string]> | null
+  scores?: string
   file: string
   rows: number
   accounts: number
   fraudRows: number
   start: string
   end: string
-  fraudWindow: [string, string]
+  fraudWindow: [string | null, string | null]
 }
 
 export interface Snapshot {
@@ -149,6 +189,7 @@ export interface Profile {
   firstInT: number | null
   firstOutT: number | null
   frozen: { at: number; by: string; reference: string | null } | null
+  held?: Restriction | null
   truthRole: Role
   note: string
 }
@@ -224,6 +265,8 @@ export interface Platform {
     url?: string
     error: string | null
     writeErrors?: number
+    durable?: boolean
+    warning?: string | null
     runs?: number
     auditEvents?: number
     decisions?: Record<string, number>
@@ -233,6 +276,23 @@ export interface Platform {
     deadLetters?: number
   }
   registry?: RegistryCounts
+  scoring?: {
+    mode: string
+    scoringMode?: 'exact' | 'cached'
+    edges?: number
+    edgesInWindow?: number
+    nodes?: number
+    windowHours?: number
+    exact?: boolean
+    features?: string[]
+    refreshSeconds?: number | null
+    cacheRefreshes?: number
+    lastRefreshMs?: number | null
+    batches?: number
+    lastMs?: number | null
+    lastSubgraphEdges?: number | null
+    threshold?: { threshold: number; source: string } | null
+  }
   integrations: {
     gateway?: { url: string; sandbox: boolean; signed: boolean }
     cfcfrms?: { url: string; sandbox: boolean }

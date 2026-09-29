@@ -140,7 +140,7 @@ def convert_ibm_variant(base_dir: Path, variant: str) -> Optional[Path]:
     return out_path
 
 
-def convert_nolambur(base_dir: Path) -> Optional[Path]:
+def convert_nolambur(base_dir: Path, dataset: str = "v1") -> Optional[Path]:
     """Build Nolambur formatted_transactions.csv from the flat transaction file.
 
     nolambur_transactions.csv carries its own per-transaction `is_fraud` column
@@ -157,16 +157,19 @@ def convert_nolambur(base_dir: Path) -> Optional[Path]:
     to the shorter (account-count) file length. Any F1 computed against that
     file is meaningless (zero true positives are even possible).
     """
-    out_dir = base_dir / "nolambur"
+    out_dir = base_dir / ("nolambur_v2" if dataset == "v2" else "nolambur")
     out_path = out_dir / "formatted_transactions.csv"
 
-    source_candidates = [base_dir, base_dir.parent]
     tx_path: Optional[Path] = None
-    for source_base in source_candidates:
-        candidate = source_base / "nolambur_transactions.csv"
-        if candidate.exists():
-            tx_path = candidate
-            break
+    if dataset == "v2":
+        # nolambur_v2_gen.py writes transactions.csv already sorted by time; rows keep that order
+        tx_path = out_dir / "transactions.csv" if (out_dir / "transactions.csv").exists() else None
+    else:
+        for source_base in (base_dir, base_dir.parent):
+            candidate = source_base / "nolambur_transactions.csv"
+            if candidate.exists():
+                tx_path = candidate
+                break
 
     if tx_path is None:
         logging.warning("nolambur_transactions.csv missing under %s or %s", base_dir, base_dir.parent)
@@ -213,6 +216,7 @@ def convert_nolambur(base_dir: Path) -> Optional[Path]:
 
             amount = float(first_nonempty(tx, ["amount_inr", "Amount", "amount"], "0") or 0)
             is_fraud = int(float(first_nonempty(tx, ["is_fraud", "Is Laundering"], "0") or 0))
+            channel = 1 if first_nonempty(tx, ["channel"], "P2P") == "P2M" else 0  # v1 has no channel: all 0
             writer.writerow([
                 idx,
                 encode(first_nonempty(tx, ["sender_id", "from_id", "sender_vpa"])),
@@ -222,7 +226,7 @@ def convert_nolambur(base_dir: Path) -> Optional[Path]:
                 0,
                 amount,
                 0,
-                0,
+                channel,
                 is_fraud,
             ])
             row_count += 1
@@ -242,6 +246,8 @@ def main() -> int:
         action="store_true",
         help="Format only Nolambur data, skip IBM variants (faster for testing).",
     )
+    parser.add_argument("--dataset", choices=["v1", "v2"], default="v1",
+                        help="v1: nolambur_transactions.csv -> nolambur/; v2: nolambur_v2/transactions.csv -> nolambur_v2/")
     args = parser.parse_args()
     
     setup_logging()
@@ -261,7 +267,7 @@ def main() -> int:
         logging.info("Skipping IBM AML variants (--nolambur-only flag set)")
 
     logging.info("Preparing Nolambur data under %s", root)
-    nol = convert_nolambur(root)
+    nol = convert_nolambur(root, args.dataset)
     if nol is not None:
         created.append(nol)
 
