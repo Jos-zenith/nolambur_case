@@ -2,7 +2,7 @@
 //
 //   node scripts/capture-rail-snapshot.mjs [bridge-url]      default: $GNN_FASTAPI_URL or http://127.0.0.1:8001
 //
-// Writes public/rail-snapshot.json: the bridge's /rail/status metrics and /rail/evaluation, verbatim,
+// Writes public/rail-snapshot.json: the bridge's /rail/status metrics, /rail/evaluation and /rail/graph/network, verbatim,
 // plus where and when they were captured. The console labels everything from this file as a snapshot
 // and replaces it with live data as soon as the bridge answers. Capture once the replay (RAIL_SOURCE=replay)
 // is a few days into the v2 data, so the numbers show campaigns, alerts and holds, not an empty start.
@@ -22,6 +22,7 @@ async function get(path) {
 const status = await get('/rail/status')
 if (status.status !== 'ready') throw new Error(`bridge is ${status.status}, not ready`)
 const evaluation = await get('/rail/evaluation')
+const network = await get('/rail/graph/network?limit=40')
 if (status.metrics.rowsReplayed < 20000) {
   console.warn(`warning: only ${status.metrics.rowsReplayed} rows replayed; few campaigns have played yet`)
 }
@@ -32,6 +33,7 @@ const snapshot = {
   metrics: status.metrics,
   dataset: status.dataset,
   evaluation,
+  network,
 }
 const out = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'rail-snapshot.json')
 writeFileSync(out, JSON.stringify(snapshot))

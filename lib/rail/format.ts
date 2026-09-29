@@ -26,9 +26,10 @@ export function stamp(t: number) {
 export function duration(sec: number | null | undefined) {
   if (sec === null || sec === undefined) return '—'
   const s = Math.round(Math.abs(sec))
-  if (s < 60) return `${s}s`
-  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`
-  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
+  const sign = sec <= -0.5 ? '−' : '' // a negative lead: the alert came after the money left
+  if (s < 60) return `${sign}${s}s`
+  if (s < 3600) return `${sign}${Math.floor(s / 60)}m ${s % 60}s`
+  return `${sign}${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
 }
 
 export function ago(now: number, t: number) {

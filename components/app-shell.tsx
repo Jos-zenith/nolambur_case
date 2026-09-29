@@ -1,6 +1,6 @@
 'use client'
 
-import { ShieldHalf } from 'lucide-react'
+import { Briefcase, Brain, LayoutDashboard, ListChecks, ScanSearch, Server, ShieldHalf } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -11,12 +11,12 @@ import { useRail, useRailStream, useRoles } from '@/lib/rail/store'
 import { cn } from '@/lib/utils'
 
 const NAV = [
-  { href: '/', label: 'Overview' },
-  { href: '/console', label: 'Alert queue', badge: 'alerts' as const },
-  { href: '/onboarding', label: 'Onboarding' },
-  { href: '/cases', label: 'Cases' },
-  { href: '/model', label: 'Model' },
-  { href: '/platform', label: 'Platform' },
+  { href: '/', label: 'Overview', icon: LayoutDashboard },
+  { href: '/console', label: 'Alert queue', icon: ListChecks, badge: 'alerts' as const },
+  { href: '/onboarding', label: 'Onboarding', icon: ScanSearch },
+  { href: '/cases', label: 'Cases', icon: Briefcase },
+  { href: '/model', label: 'Model', icon: Brain },
+  { href: '/platform', label: 'Platform', icon: Server },
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -47,17 +47,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   key={item.href}
                   href={item.href}
                   aria-current={active ? 'page' : undefined}
+                  aria-label={item.label}
+                  title={item.label}
                   className={cn(
-                    'flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-[13px] lg:px-3 transition-colors',
-                    active ? 'bg-card font-medium text-foreground shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:bg-card/60 hover:text-foreground',
+                    'flex h-9 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-[13.5px] transition-colors lg:px-3',
+                    active ? 'bg-brand-1 font-semibold text-white shadow-sm' : 'font-medium text-muted-foreground hover:bg-card hover:text-foreground',
                   )}
                 >
-                  {item.label}
+                  <item.icon className={cn('size-4 shrink-0', active ? 'text-white' : 'text-muted-foreground/80')} aria-hidden />
+                  <span className={cn(!active && 'hidden md:inline')}>{item.label}</span>
                   {count !== null && count > 0 && (
                     <span
                       className={cn(
                         'figure min-w-5 rounded-full px-1.5 text-center text-[11px] font-semibold leading-[18px] tabular-nums',
-                        critical > 0 ? 'bg-sev-critical text-white' : 'bg-brand-soft text-brand-2',
+                        critical > 0 ? 'bg-sev-critical text-white' : active ? 'bg-white/20 text-white' : 'bg-brand-soft text-brand-2',
                       )}
                       title={`${count} open alerts${critical ? `, ${critical} critical` : ''}`}
                     >
@@ -87,7 +90,7 @@ function ActorPicker() {
   return (
     <label className="flex shrink-0 items-center gap-2 text-[12px] text-muted-foreground" title="The bridge checks this user's role on every action and records it in the audit trail.">
       <span className="hidden xl:inline">Signed in as</span>
-      <select value={actor ?? ''} onChange={e => setActor(e.target.value)} className="h-8 rounded-md border bg-card px-2 text-[12.5px] text-foreground">
+      <select value={actor ?? ''} onChange={e => setActor(e.target.value)} className="h-8 max-w-[7.5rem] rounded-md border bg-card px-2 text-[12.5px] text-foreground sm:max-w-none">
         {roles.users.map(u => (
           <option key={u.actor} value={u.actor}>
             {u.actor} ({u.role})

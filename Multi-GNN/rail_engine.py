@@ -55,7 +55,7 @@ from typing import Any, Callable
 import pandas as pd
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from infra import feedback as infra_feedback
 from infra import integrations, rbac, sandbox, settings as infra_settings
@@ -66,6 +66,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 LIVE_ROW_BASE = 1_000_000  # row ids for ingested payments, clear of the CSV's 0..N
 MAX_BATCH = 2000  # payments scored and ingested per tick
 MAX_INBOX = 50_000
+DEMO_PREFIX = "test."  # account ids of the test scams sent from the overview page
+DEMO_COOLDOWN = 10.0  # seconds between new test scams, across all visitors
+DEMO_MAX = 200  # test scams per bridge process
 RULE_VERSION = "r2.0"
 TICK_SECONDS = 0.5
 LEAD_IN_SECONDS = 45
@@ -998,17 +1001,30 @@ class RailEngine:
         open_ = [a for a in alerts if a.status == "open"]
         by_sev = {k: sum(1 for a in open_ if a.severity == k) for k in SEV_RANK}
         tta = [a.created_t - a.first_evidence_t for a in alerts]
-        leads = [a.lead_seconds for a in alerts if a.lead_seconds is not None]
+        # Same definitions as evaluate_temporal, over what has replayed so far: a mule counts once
+        # scam money has touched it (mules also shop, and nobody can catch that), recall is rules
+        # or model, lead is per mule from its first alert to the first scam money leaving it.
+        mule_roles = ("l1_mule", "l2_mule")
+        role = self.data.role
+        first_in: dict[str, float] = {}
+        first_out: dict[str, float] = {}
+        for r in self.replayed:
+            if r.is_fraud != 1:
+                continue
+            if role.get(r.to_id) in mule_roles and r.t < first_in.get(r.to_id, math.inf):
+                first_in[r.to_id] = r.t
+            if role.get(r.from_id) in mule_roles and r.t < first_out.get(r.from_id, math.inf):
+                first_out[r.from_id] = r.t
+        mules_active = set(first_in) | set(first_out)
+        first_alert: dict[str, float] = {}
+        for a in self.alerts.values():
+            first_alert[a.account_id] = min(first_alert.get(a.account_id, math.inf), a.created_t)
         # Accounts outside the labelled dataset (new live payers) have no truth; leave them out.
-        rule_alerts = [a for a in alerts if a.detector != "model_only" and a.truth_role != "unknown"]
-        mules_seen = {
-            acct
-            for r in self.replayed
-            if not r.blocked
-            for acct in (r.from_id, r.to_id)
-            if self.data.role.get(acct) in ("l1_mule", "l2_mule")
-        }
-        mules_alerted = {a.account_id for a in rule_alerts if a.truth_role in ("l1_mule", "l2_mule")}
+        labelled = [a for a in alerts if a.truth_role != "unknown"]
+        rule_accounts = {a.account_id for a in labelled if a.detector != "model_only"}
+        alerted_accounts = {a.account_id for a in labelled}
+        mules_alerted = alerted_accounts & mules_active
+        leads = [first_out[m] - first_alert[m] for m in mules_active if m in first_alert and m in first_out]
         last_minute = sum(1 for r in self.replayed[-400:] if r.t > self.sim_t - 60)
         return {
             "simT": self.sim_t,
@@ -1026,9 +1042,13 @@ class RailEngine:
             "openBySeverity": by_sev,
             "medianTimeToAlertSec": statistics.median(tta) if tta else None,
             "medianLeadSec": statistics.median(leads) if leads else None,
-            "precision": (sum(1 for a in rule_alerts if a.truth_role in ("l1_mule", "l2_mule")) / len(rule_alerts)) if rule_alerts else None,
-            "muleRecall": (len(mules_alerted) / len(mules_seen)) if mules_seen else None,
-            "mulesSeen": len(mules_seen),
+            "leadN": len(leads),
+            "alertedBeforeMoneyLeft": sum(1 for x in leads if x > 0),
+            # account level, rules + model, every labelled account ever alerted (a mule or not)
+            "precision": (sum(1 for a in alerted_accounts if role.get(a) in mule_roles) / len(alerted_accounts)) if alerted_accounts else None,
+            "muleRecall": (len(mules_alerted) / len(mules_active)) if mules_active else None,
+            "muleRecallRules": (len(rule_accounts & mules_active) / len(mules_active)) if mules_active else None,
+            "mulesSeen": len(mules_active),
             "mulesAlerted": len(mules_alerted),
             "frozenAccounts": len(self.frozen),
             "heldAccounts": sum(1 for h in self.held.values() if h["level"] >= 2),
@@ -1111,6 +1131,59 @@ class RailEngine:
             **summarize(paths, acct),
             "flaggedReached": len({n["id"] for p in paths for n in p["nodes"][1:] if n["flagged"]}),
         }
+
+    def network(self, limit: int = 40, per_account: int = 6) -> dict[str, Any]:
+        """The money graph around the accounts under alert: who paid whom, one edge per pair,
+        biggest flows first. Most severe and most recent alerts are kept when over `limit`."""
+        worst: dict[str, Alert] = {}
+        for a in self.alerts.values():
+            if a.status in ("superseded", "cleared"):
+                continue
+            cur = worst.get(a.account_id)
+            if cur is None or (SEV_RANK[a.severity], a.updated_t) > (SEV_RANK[cur.severity], cur.updated_t):
+                worst[a.account_id] = a
+        picked = sorted(worst.values(), key=lambda a: (SEV_RANK[a.severity], a.updated_t), reverse=True)[:limit]
+        centre = {a.account_id for a in picked}
+
+        pairs: dict[tuple[str, str], dict[str, Any]] = {}
+        for acct in centre:
+            flows: dict[tuple[str, str], list[Row]] = defaultdict(list)
+            for r in self.inbound.get(acct, []):
+                flows[(r.from_id, r.to_id)].append(r)
+            for r in self.outbound.get(acct, []):
+                flows[(r.from_id, r.to_id)].append(r)
+            ranked = sorted(flows.items(), key=lambda kv: sum(r.amount for r in kv[1]), reverse=True)
+            # keep links between alerted accounts, then the biggest other flows
+            keep = [kv for kv in ranked if kv[0][0] in centre and kv[0][1] in centre]
+            keep += [kv for kv in ranked if not (kv[0][0] in centre and kv[0][1] in centre)][:per_account]
+            for (src, dst), rows in keep:
+                if (src, dst) in pairs:
+                    continue
+                pairs[(src, dst)] = {
+                    "source": src,
+                    "target": dst,
+                    "amount": round(sum(r.amount for r in rows), 2),
+                    "count": len(rows),
+                    "gnnMax": round(max(r.gnn for r in rows), 4),
+                    "blocked": any(r.blocked for r in rows),
+                    "lastT": max(r.t for r in rows),
+                }
+
+        ids = centre | {e["source"] for e in pairs.values()} | {e["target"] for e in pairs.values()}
+        nodes = []
+        for acct in ids:
+            a = worst.get(acct)
+            nodes.append({
+                "id": acct,
+                "vpa": self._vpa(acct),
+                "level": self._level(acct),
+                "severity": a.severity if a else None,
+                "alertId": a.id if a else None,
+                "detector": a.detector if a else None,
+                "gnnMax": round(a.gnn_max, 4) if a else None,
+                "test": acct.startswith(DEMO_PREFIX),
+            })
+        return {"simT": self.sim_t, "nodes": nodes, "edges": list(pairs.values()), "alertedAccounts": len(worst), "shown": len(centre)}
 
     def profile(self, acct: str) -> dict[str, Any]:
         ins = self.inbound.get(acct, [])
@@ -1777,6 +1850,8 @@ class RailService:
         self.store_error: str | None = None
         self.ingest_stats = {"webhookAccepted": 0, "rejected": 0, "scored": 0, "scoreErrors": 0, "lastScoreError": None, "lastBatch": 0, "lastScoreMs": None}
         self._flushing = False
+        self.demos: dict[str, dict[str, Any]] = {}
+        self.demo_last_start = 0.0
 
     async def start(self, load: Callable[[], tuple[pd.DataFrame, Any]]) -> None:
         self.status = "warming"
@@ -2029,6 +2104,51 @@ class RailService:
         if paused is not None:
             self.paused = paused
         return {"speed": self.engine.speed, "paused": self.paused, "metrics": self.engine.metrics()}
+
+
+class DemoBody(BaseModel):
+    stage: int = Field(ge=1, le=3)
+    id: str | None = Field(default=None, pattern=r"^[0-9a-f]{6}$")
+
+
+def demo_accounts(demo_id: str) -> dict[str, str]:
+    """The test scam's cast; each VPA is also its account id."""
+    cast = {f"victim{i}": f"{DEMO_PREFIX}victim{i}.{demo_id}@okdemo" for i in (1, 2, 3)}
+    cast["mule"] = f"{DEMO_PREFIX}mule.{demo_id}@ybl"
+    cast |= {f"layer2_{i}": f"{DEMO_PREFIX}l2-{i}.{demo_id}@ibl" for i in (1, 2, 3)}
+    cast["cashout"] = f"{DEMO_PREFIX}cashout.{demo_id}@paytm"
+    return cast
+
+
+def demo_payments(demo_id: str, stage: int, arrived: list[float] | None = None) -> list[dict[str, Any]]:
+    """Stage 1: three victims pay one new account just under the ₹1 lakh UPI cap. Stage 2: it
+    forwards 90% of what arrived across three accounts. Stage 3: each of those that received
+    money sends 95% of it on to one cash-out account. `arrived`: what reached each sender."""
+    c = demo_accounts(demo_id)
+    split = [0.34, 0.30, 0.26]
+    if stage == 1:
+        legs = [(i, c[f"victim{i + 1}"], c["mule"], amt) for i, amt in enumerate([99_000.0, 98_500.0, 99_999.0])]
+    elif stage == 2:
+        legs = [(i, c["mule"], c[f"layer2_{i + 1}"], round(sum(arrived or []) * f, 2)) for i, f in enumerate(split)]
+    else:
+        legs = [(i, c[f"layer2_{i + 1}"], c["cashout"], round(a * 0.95, 2)) for i, a in enumerate(arrived or [])]
+    return [
+        {"txn_id": f"{DEMO_PREFIX}{demo_id}.{stage}.{i}", "payer_vpa": a, "payee_vpa": b, "amount_inr": amt, "timestamp": None,
+         "payer_state": None, "payee_state": None, "payer_account_id": a, "payee_account_id": b}
+        for i, a, b, amt in legs
+        if amt > 0
+    ]
+
+
+def demo_rows(eng: "RailEngine", demo: dict[str, Any]) -> dict[str, Row]:
+    """The engine's own copies of a test scam's payments; blocked ones are only in `replayed`."""
+    seen: dict[str, Row] = {}
+    for r in reversed(eng.replayed):
+        if len(seen) == len(demo["txns"]):
+            break
+        if r.txn_id in demo["txns"]:
+            seen[r.txn_id] = r
+    return seen
 
 
 class ActionBody(BaseModel):
@@ -2308,6 +2428,84 @@ def mount(app, load: Callable[[], tuple[pd.DataFrame, Any]], predict_chain: Call
             "clock": "replay clock" if not eng.live else "payment timestamp",
             "paused": service.paused,
         }
+
+    # ------------------------------------------------------------------ test scam
+
+    @router.post("/demo/scam")
+    async def demo_scam(body: DemoBody) -> dict[str, Any]:
+        """Send one stage of a test mule chain through the webhook path: the same queue, GNN
+        scorer, detectors and router as any payment. Accounts are new and prefixed `test.`."""
+        eng = engine()
+        now = time.time()
+        if body.id is None:
+            if body.stage != 1:
+                raise HTTPException(status_code=400, detail="start a new test scam at stage 1")
+            if now - service.demo_last_start < DEMO_COOLDOWN:
+                wait = math.ceil(DEMO_COOLDOWN - (now - service.demo_last_start))
+                return JSONResponse({"detail": f"another test scam just started; try again in {wait}s"}, status_code=429, headers={"Retry-After": str(wait)})
+            if len(service.demos) >= DEMO_MAX:
+                raise HTTPException(status_code=429, detail="test-scam limit for this bridge process reached; restart the bridge")
+            service.demo_last_start = now
+            demo_id = uuid.uuid4().hex[:6]
+            service.demos[demo_id] = {"stages": set(), "txns": {}, "payments": []}
+        else:
+            demo_id = body.id
+            if demo_id not in service.demos:
+                raise HTTPException(status_code=404, detail="unknown test scam")
+        demo = service.demos[demo_id]
+        if body.stage in demo["stages"]:
+            raise HTTPException(status_code=409, detail=f"stage {body.stage} already sent")
+        if body.stage > 1 and body.stage - 1 not in demo["stages"]:
+            raise HTTPException(status_code=409, detail=f"send stage {body.stage - 1} first")
+        arrived: list[float] | None = None
+        if body.stage > 1:  # only money that reached the sender can move on, as with a real balance
+            rows = demo_rows(eng, demo)
+            prev = [p for p in demo["payments"] if demo["txns"][p["txn_id"]] == body.stage - 1]
+            if any(p["txn_id"] not in rows for p in prev):
+                raise HTTPException(status_code=409, detail=f"stage {body.stage - 1} is still in the queue")
+            got = {int(p["txn_id"].rsplit(".", 1)[1]): p["amount_inr"] for p in prev if not rows[p["txn_id"]].blocked and not rows[p["txn_id"]].delayed}
+            arrived = [sum(got.values())] if body.stage == 2 else [got.get(i, 0.0) for i in range(3)]
+            if not sum(arrived):
+                raise HTTPException(status_code=409, detail="nothing to send: no money got through the previous stage")
+        payments = demo_payments(demo_id, body.stage, arrived)
+        demo["stages"].add(body.stage)
+        demo["payments"] += payments
+        for p in payments:
+            demo["txns"][p["txn_id"]] = body.stage
+        service.inbox.put_nowait(("webhook", payments, None))
+        service.ingest_stats["webhookAccepted"] += len(payments)
+        return {"id": demo_id, "stage": body.stage, "accepted": len(payments), "paused": service.paused, "replayDone": eng.done}
+
+    @router.get("/demo/scam/{demo_id}")
+    async def demo_scam_status(demo_id: str) -> dict[str, Any]:
+        eng = engine()
+        demo = service.demos.get(demo_id)
+        if demo is None:
+            raise HTTPException(status_code=404, detail="unknown test scam")
+        accounts = demo_accounts(demo_id)
+        seen = demo_rows(eng, demo)
+        payments = []
+        for p in demo["payments"]:
+            r = seen.get(p["txn_id"])
+            payments.append({
+                "txnId": p["txn_id"], "stage": demo["txns"][p["txn_id"]], "from": p["payer_vpa"], "to": p["payee_vpa"], "amount": p["amount_inr"],
+                "status": "queued" if r is None else "blocked" if r.blocked else "delayed" if r.delayed else "settled",
+                "gnn": None if r is None else round(r.gnn, 4),
+            })
+        alerts = [a.public() for acct in accounts.values() for a in eng._alerts_on(acct) if a.status != "superseded"]
+        return {
+            "id": demo_id,
+            "stages": sorted(demo["stages"]),
+            "payments": payments,
+            "alerts": sorted(alerts, key=lambda a: a["createdT"]),
+            "accounts": {name: {"id": acct, "level": eng._level(acct), "action": "frozen" if acct in eng.frozen else LEVELS.get(eng._level(acct), "alert_only")} for name, acct in accounts.items()},
+            "threshold": eng.model_threshold,
+            "paused": service.paused,
+        }
+
+    @router.get("/graph/network")
+    async def network(limit: int = 40) -> dict[str, Any]:
+        return engine().network(max(5, min(limit, 120)))
 
     @router.get("/platform")
     async def platform() -> dict[str, Any]:

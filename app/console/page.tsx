@@ -17,11 +17,20 @@ export default function ConsolePage() {
   const [selected, setSelected] = useState<string | null>(null)
   const [showLabels, setShowLabels] = useState(true)
 
+  // /console?alert=ID, from the overview's network graph or a test scam
+  const [linked, setLinked] = useState<string | null>(null)
+  useEffect(() => setLinked(new URLSearchParams(window.location.search).get('alert')), [])
+
   useEffect(() => {
+    if (linked && alerts[linked]) {
+      setSelected(linked)
+      setLinked(null)
+      return
+    }
     if (selected && alerts[selected]) return
     const first = sortAlerts(Object.values(alerts).filter(a => a.status === 'open'))[0]
     setSelected(first?.id ?? null)
-  }, [alerts, selected])
+  }, [alerts, selected, linked])
 
   return (
     <div className="grid gap-4">
@@ -60,7 +69,7 @@ export default function ConsolePage() {
               <div>
                 <MousePointerClick className="mx-auto size-8 text-brand-2/60" />
                 <p className="mt-2 font-medium text-foreground">No open alerts yet</p>
-                <p className="mt-1">The fraud in this dataset happens between 10:30 and 10:35 on the first morning. Alerts appear the moment a detector fires.</p>
+                <p className="mt-1">Scam campaigns run across the ten replayed days. Alerts appear the moment a detector fires.</p>
               </div>
             </div>
           )}

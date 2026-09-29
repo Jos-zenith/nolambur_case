@@ -2,10 +2,14 @@
 
 import { Activity, Radar, ShieldCheck, Siren, Target, Timer } from 'lucide-react'
 
-import { duration, inrShort } from '@/lib/rail/format'
+import { duration, inrShort, pct } from '@/lib/rail/format'
 import { useDisplayMetrics, useRail } from '@/lib/rail/store'
 import { StatTile, Term } from './kit'
 
+/**
+ * The running replay, so far. Same definitions as /rail/evaluation (account level, rules + model,
+ * lead per mule), but over every day replayed, including the days the model trained on.
+ */
 export function MetricStrip() {
   const { metrics: m, stale } = useDisplayMetrics()
   const liveTicks = useRail(s => s.tickCounts)
@@ -17,59 +21,6 @@ export function MetricStrip() {
     <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
       <StatTile
         i={0}
-        icon={Activity}
-        tone="brand"
-        label="Transactions / min"
-        value={m.txnsLastMinute}
-        trend={ticks}
-        note={`${inrShort(m.volumeReplayed)} moved so far`}
-        help="Payments processed in the last minute of replay (or stream) time. The sparkline is rows per tick (0.5 s), so you can see the fraud burst arrive."
-      />
-      <StatTile
-        i={1}
-        icon={Siren}
-        tone={m.openBySeverity.critical ? 'critical' : 'neutral'}
-        label="Open alerts"
-        value={m.openAlerts}
-        note={`${m.openBySeverity.critical} critical · ${m.openBySeverity.high} high · ${m.openBySeverity.medium} medium`}
-        help="Alerts nobody has cleared, escalated or frozen yet. Critical means several signals at once, such as two victims paying the same new account."
-      />
-      <StatTile
-        i={2}
-        icon={Timer}
-        tone="teal"
-        label="Median lead time"
-        value={m.medianLeadSec}
-        format={v => duration(v)}
-        note="from alert to the mule forwarding the money"
-        help={
-          <>
-            The <b>window to act</b>: how long after the alert the mule starts sending the money on. Freeze inside it and the money stays put.
-          </>
-        }
-      />
-      <StatTile
-        i={3}
-        icon={Target}
-        tone="neutral"
-        label="Precision"
-        value={m.precision === null ? null : m.precision * 100}
-        format={v => `${Math.round(v)}%`}
-        note="rule alerts that really are mules"
-        help="Of the accounts the rules alerted on, the share the dataset labels as mules. The detectors never see these labels; they are used only to score the detectors."
-      />
-      <StatTile
-        i={4}
-        icon={Radar}
-        tone="neutral"
-        label="Mule recall"
-        value={m.muleRecall === null ? null : m.muleRecall * 100}
-        format={v => `${Math.round(v)}%`}
-        note={`${m.mulesAlerted} of ${m.mulesSeen} mules seen caught`}
-        help="Of the mule accounts that have appeared in the replay so far, the share with at least one rule alert."
-      />
-      <StatTile
-        i={5}
         icon={ShieldCheck}
         tone={m.blockedFraudAmount > 0 ? 'ok' : 'neutral'}
         label="Fraud blocked"
@@ -85,12 +36,70 @@ export function MetricStrip() {
               'freeze an account to block its transfers'
             )
           ) : (
-            `${m.heldAccounts} held · ${m.frozenAccounts} frozen · ${inrShort(m.blockedGenuineAmount)} genuine blocked`
+            `${m.heldAccounts} held · ${m.frozenAccounts} frozen · ${inrShort(m.blockedGenuineAmount)} genuine`
           )
         }
-        help="Scam money in transfers the engine stopped because one side was held or frozen. Genuine blocked is the collateral: clean payments caught by the same block."
+        help="Scam money in transfers the engine stopped because one side was held or frozen. Genuine is the collateral: clean payments caught by the same block."
+      />
+      <StatTile
+        i={1}
+        icon={Siren}
+        tone={m.openBySeverity.critical ? 'critical' : 'neutral'}
+        label="Open alerts"
+        value={m.openAlerts}
+        note={`${m.openBySeverity.critical} critical · ${m.openBySeverity.high} high · ${m.openBySeverity.medium} medium`}
+        help="Alerts nobody has cleared, escalated or frozen yet. Critical means several signals at once, such as two victims paying the same new account."
+      />
+      <StatTile
+        i={2}
+        icon={Radar}
+        tone="neutral"
+        label="Mules caught"
+        value={m.muleRecall === null ? null : m.muleRecall * 100}
+        format={v => `${Math.round(v)}%`}
+        note={`${m.mulesAlerted} of ${m.mulesSeen} · rules alone ${pct(m.muleRecallRules ?? null)}`}
+        help={
+          <>
+            <Term k="recall">Recall</Term>, rules + GNN: of the mule accounts scam money has reached so far, the share with an alert. A mule that has only bought
+            groceries yet is not counted: nothing could catch it.
+          </>
+        }
+      />
+      <StatTile
+        i={3}
+        icon={Target}
+        tone="neutral"
+        label="Precision"
+        value={m.precision === null ? null : m.precision * 100}
+        format={v => `${Math.round(v)}%`}
+        note="of alerted accounts are mules"
+        help="Of the labelled accounts with any alert (rules or GNN), the share the dataset labels as mules. The detectors never see these labels; they are used only to score them."
+      />
+      <StatTile
+        i={4}
+        icon={Timer}
+        tone="teal"
+        label="Median lead time"
+        value={m.medianLeadSec}
+        format={v => duration(v)}
+        note={m.leadN ? `${m.alertedBeforeMoneyLeft} of ${m.leadN} mules alerted before money left` : 'per mule: alert → money leaves'}
+        help={
+          <>
+            The <b>window to act</b>, per mule: from its first alert to the first scam money leaving it. Negative means the alert came after. Freeze inside it and the
+            money stays put.
+          </>
+        }
+      />
+      <StatTile
+        i={5}
+        icon={Activity}
+        tone="brand"
+        label="Transactions / min"
+        value={m.txnsLastMinute}
+        trend={ticks}
+        note={`${inrShort(m.volumeReplayed)} moved so far`}
+        help="Payments processed in the last minute of replay (or stream) time. The sparkline is rows per tick (0.5 s), so you can see a scam burst arrive."
       />
     </section>
   )
 }
-

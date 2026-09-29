@@ -1,6 +1,6 @@
 'use client'
 
-import { Activity, ArrowRight, BookOpen, Briefcase, ListChecks, ScanSearch, CheckCircle2, CircleDashed, FlaskConical, History, Layers, Scale, Users, GitFork, Hourglass, Network, ScanEye, ShieldAlert, ShieldCheck, Zap } from 'lucide-react'
+import { Activity, ArrowRight, BookOpen, Briefcase, ChevronDown, ListChecks, ScanSearch, CheckCircle2, CircleDashed, FlaskConical, History, Layers, Scale, Send, Users, GitFork, Hourglass, Network, ScanEye, ShieldAlert, ShieldCheck, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -12,6 +12,8 @@ import { cn } from '@/lib/utils'
 import { BackendGate, useWaitSeconds } from './BackendGate'
 import { GLOSSARY, Term, useCountUp, type TermKey } from './kit'
 import { MetricStrip } from './MetricStrip'
+import { NetworkGraph } from './NetworkGraph'
+import { ScamLab } from './ScamLab'
 
 /** The parts of /rail/evaluation (rail_engine.evaluate_temporal: test days only) this page shows. */
 type Evaluation = {
@@ -61,27 +63,22 @@ export function Hero() {
     <section className="relative overflow-hidden rounded-lg bg-brand-1 text-white">
       <div className="relative grid gap-8 p-6 md:p-8 lg:grid-cols-[1.25fr_1fr] lg:items-center">
         <div className="enter">
-          <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-white/60">Payment-aggregator risk · UPI</p>
-          <h1 className="mt-3 max-w-2xl text-[30px] font-semibold leading-[1.2] tracking-tight md:text-[34px]">
-            Freeze the mule before the money moves on.
-          </h1>
-          <p className="mt-3 flex max-w-xl items-start gap-2 rounded-md bg-white/[0.08] px-3 py-2 text-[13.5px] leading-snug text-white/90">
-            <Users className="mt-0.5 size-4 shrink-0 text-white/70" />
-            <span>
-              <b className="font-semibold">Built for fraud-operations analysts at a payment aggregator:</b>{' '}the people who decide, within minutes, whether to stop
-              an account&apos;s money.
-            </span>
+          <p className="flex items-center gap-1.5 text-[12px] font-medium uppercase tracking-[0.08em] text-white/65">
+            <Users className="size-3.5" /> For fraud-operations analysts · UPI
           </p>
-          <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-white/75">
-            In a scam, the victim&apos;s money lands in a stranger&apos;s account and is passed on within minutes. This console checks every UPI payment as it
-            arrives, and raises the alarm while the money is still in that first account.
+          <h1 className="mt-3 max-w-2xl text-[32px] font-semibold leading-[1.15] tracking-tight md:text-[40px]">Freeze the mule before the money moves on.</h1>
+          <p className="mt-3 max-w-xl text-[16px] leading-relaxed text-white/80">
+            Every UPI payment is scored by a graph model and five detectors as it arrives, so the alarm goes off while the money is still in the first account.
           </p>
-          <div className="mt-6 flex flex-wrap gap-2">
-            <Link href="/console" className="group inline-flex h-10 items-center gap-2 rounded-[5px] bg-white px-4 text-[13.5px] font-medium text-brand-1 hover:bg-white/90">
+          <div className="mt-7 flex flex-wrap gap-2.5">
+            <Link
+              href="/console"
+              className="group inline-flex h-11 items-center gap-2 rounded-md bg-white px-5 text-[14.5px] font-semibold text-brand-1 shadow-[0_6px_20px_-6px_rgb(0_0_0/0.5)] hover:bg-white/90"
+            >
               Open the alert queue <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
-            <a href="#how-it-works" className="inline-flex h-10 items-center gap-2 rounded-[5px] border border-white/30 px-4 text-[13.5px] font-medium text-white hover:bg-white/10">
-              <BookOpen className="size-4" /> How a mule chain works
+            <a href="#test-scam" className="inline-flex h-11 items-center gap-2 rounded-md border border-white/35 bg-white/[0.06] px-4 text-[14px] font-medium text-white hover:bg-white/15">
+              <Send className="size-4" /> Send a test scam
             </a>
           </div>
         </div>
@@ -135,9 +132,10 @@ function HeroLive() {
       </p>
       <div className="mt-4 grid grid-cols-3 gap-2 border-t border-white/10 pt-4 text-[12px]">
         <Mini label="Open alerts" value={String(m.openAlerts)} hot={m.openBySeverity.critical > 0} />
-        <Mini label="Lead time" value={duration(m.medianLeadSec)} />
-        <Mini label="Mules caught" value={`${m.mulesAlerted}/${m.mulesSeen}`} />
+        <Mini label="Mules caught" value={`${m.mulesAlerted} of ${m.mulesSeen}`} />
+        <Mini label="Median lead" value={duration(m.medianLeadSec)} />
       </div>
+      <p className="mt-3 text-[11.5px] text-white/55">This replay so far. Held-out test figures are further down.</p>
     </div>
   )
 }
@@ -148,228 +146,6 @@ function Mini({ label, value, hot }: { label: string; value: string; hot?: boole
       <p className="text-white/60">{label}</p>
       <p className={cn('figure mt-0.5 text-[18px] font-semibold', hot && 'text-[#ffb4a8]')}>{value}</p>
     </div>
-  )
-}
-
-// ---------------------------------------------------------------------------- how a mule chain works
-
-function useReducedMotion() {
-  const [reduced, setReduced] = useState(false)
-  useEffect(() => {
-    const q = window.matchMedia('(prefers-reduced-motion: reduce)')
-    setReduced(q.matches)
-    const on = () => setReduced(q.matches)
-    q.addEventListener('change', on)
-    return () => q.removeEventListener('change', on)
-  }, [])
-  return reduced
-}
-
-const V = [
-  { id: 'v1', x: 80, y: 80 },
-  { id: 'v2', x: 80, y: 180 },
-]
-const L1 = { x: 300, y: 130 }
-const L2 = [
-  { x: 520, y: 60 },
-  { x: 520, y: 130 },
-  { x: 520, y: 200 },
-]
-const OUT = { x: 700, y: 130 }
-
-const curve = (a: { x: number; y: number }, b: { x: number; y: number }) => {
-  const mx = (a.x + b.x) / 2
-  return `M${a.x},${a.y} C${mx},${a.y} ${mx},${b.y} ${b.x},${b.y}`
-}
-
-/** An illustration, not data: the shape every Nolambur fraud case takes, and where each detector fires. */
-export function MuleChainExplainer() {
-  const reduced = useReducedMotion()
-  const ev = useEvaluation()
-  const [step, setStep] = useState<number | null>(null)
-  const inEdges = V.map(v => curve(v, L1))
-  const midEdges = L2.map(n => curve(L1, n))
-  const outEdges = L2.map(n => curve(n, OUT))
-
-  const STEPS = [
-    {
-      n: 1,
-      icon: Zap,
-      title: 'Victims pay a stranger',
-      body: (
-        <>
-          Someone is talked into paying (a fake investment, a &ldquo;digital arrest&rdquo;). UPI caps a transfer at ₹1 lakh, so the money goes in several transfers,
-          often just under the cap and over more than one day, to an account they have never paid. That account is the first-layer <Term k="mule">mule</Term>.
-        </>
-      ),
-      detector: 'Inflow burst from new payers · Structuring',
-    },
-    {
-      n: 2,
-      icon: GitFork,
-      title: 'The mule forwards it fast',
-      body: (
-        <>
-          Within minutes or hours most of it leaves again, split across several accounts. That is <Term k="pass-through">pass-through</Term>, and the gap between
-          the alert and the money leaving is the <Term k="lead time">lead time</Term>
-          {ev?.detectors.leadSeconds.median != null ? `: ${duration(ev.detectors.leadSeconds.median)} on the test days (median).` : '.'}
-        </>
-      ),
-      detector: 'Rapid pass-through',
-    },
-    {
-      n: 3,
-      icon: Network,
-      title: 'The next hop lights up',
-      body: (
-        <>
-          Anyone receiving from a flagged account is flagged too: the <Term k="l2 mule">second-layer mules</Term>. The graph model adds leads the rules miss by
-          looking at who is connected to whom.
-        </>
-      ),
-      detector: 'Funds from a flagged account',
-    },
-    {
-      n: 4,
-      icon: ShieldCheck,
-      title: 'Hold at the first account',
-      body: (
-        <>
-          The response is graded: a high alert delays the account&apos;s settlements, a critical one holds its outgoing transfers, and a critical one the{' '}
-          <Term k="gnn">GNN</Term> backs with a second detector is a full <Term k="hold">hold</Term>. Every restriction lifts itself after a time limit unless a
-          supervisor confirms the <Term k="freeze">freeze</Term>, and the account holder can appeal.
-        </>
-      ),
-      detector: 'Decision router',
-    },
-  ]
-
-  const on = (n: number) => step === null || step === n
-  return (
-    <section id="how-it-works" className="scroll-mt-20 grid gap-4">
-      <SectionTitle icon={BookOpen} eyebrow="The scam, step by step" title="How a mule chain moves money, and where we catch it">
-        Hover or tap a step to see where it happens. This is an illustration of the pattern; every number elsewhere on the page comes from the engine.
-      </SectionTitle>
-      <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
-        <div className="relative overflow-hidden rounded-xl border bg-card p-3 shadow-card">
-          <svg viewBox="0 0 780 260" className="h-auto w-full" role="img" aria-label="Two victims pay one first-layer mule, who forwards to three second-layer mules, who cash out.">
-            <defs>
-              <linearGradient id="mule" x1="0" x2="1">
-                <stop offset="0" stopColor="var(--sev-critical)" stopOpacity="0.9" />
-                <stop offset="1" stopColor="var(--sev-high)" stopOpacity="0.9" />
-              </linearGradient>
-            </defs>
-            {/* stage bands */}
-            {[
-              { x: 20, w: 140, label: 'Victims' },
-              { x: 230, w: 140, label: 'First-layer mule' },
-              { x: 450, w: 140, label: 'Second-layer mules' },
-              { x: 640, w: 120, label: 'Cash-out' },
-            ].map(b => (
-              <g key={b.label}>
-                <rect x={b.x} y={14} width={b.w} height={232} rx={12} fill="var(--muted)" opacity={0.55} />
-                <text x={b.x + b.w / 2} y={238} textAnchor="middle" className="fill-muted-foreground" fontSize={12}>
-                  {b.label}
-                </text>
-              </g>
-            ))}
-            {/* edges */}
-            {[...inEdges.map(d => ({ d, n: 1 })), ...midEdges.map(d => ({ d, n: 2 })), ...outEdges.map(d => ({ d, n: 3 }))].map((e, i) => (
-              <path
-                key={i}
-                d={e.d}
-                fill="none"
-                stroke={e.n === 1 ? 'var(--brand-2)' : 'var(--sev-high)'}
-                strokeWidth={e.n === 1 ? 3 : 2}
-                strokeLinecap="round"
-                opacity={on(e.n) || (step === 4 && e.n > 1) ? (step === 4 && e.n > 1 ? 0.25 : 0.85) : 0.18}
-                className={reduced || (step === 4 && e.n > 1) ? undefined : 'flow'}
-              />
-            ))}
-            {/* money packets */}
-            {!reduced && step !== 4 &&
-              [...inEdges, ...midEdges, ...outEdges].map((d, i) => (
-                <circle key={i} r={4.5} fill={i < 2 ? 'var(--brand-2)' : 'var(--sev-high)'} stroke="var(--card)" strokeWidth={1.5}>
-                  <animateMotion dur="2.6s" repeatCount="indefinite" path={d} begin={`${(i < 2 ? 0 : i < 5 ? 1.2 : 2.2) + (i % 3) * 0.25}s`} />
-                </circle>
-              ))}
-            {/* nodes */}
-            {V.map(v => (
-              <g key={v.id}>
-                <circle cx={v.x} cy={v.y} r={20} fill="var(--card)" stroke="var(--brand-2)" strokeWidth={2} />
-                <text x={v.x} y={v.y + 4} textAnchor="middle" fontSize={13} className="fill-brand-1" fontWeight={600}>
-                  ₹
-                </text>
-              </g>
-            ))}
-            <g>
-              {step === 4 && <circle cx={L1.x} cy={L1.y} r={40} fill="none" stroke="var(--ok)" strokeWidth={3} strokeDasharray="4 4" />}
-              <circle cx={L1.x} cy={L1.y} r={28} fill="url(#mule)" />
-              <text x={L1.x} y={L1.y + 5} textAnchor="middle" fontSize={13} fill="#fff" fontWeight={600}>
-                L1
-              </text>
-            </g>
-            {L2.map((n, i) => (
-              <g key={i}>
-                <circle cx={n.x} cy={n.y} r={18} fill="url(#mule)" opacity={step === 4 ? 0.35 : 0.85} />
-                <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize={11} fill="#fff" fontWeight={600}>
-                  L2
-                </text>
-              </g>
-            ))}
-            <g opacity={step === 4 ? 0.35 : 1}>
-              <rect x={OUT.x - 26} y={OUT.y - 18} width={52} height={36} rx={8} fill="var(--card)" stroke="var(--muted-foreground)" strokeWidth={1.5} />
-              <text x={OUT.x} y={OUT.y + 4} textAnchor="middle" fontSize={11} className="fill-muted-foreground">
-                ATM
-              </text>
-            </g>
-            {/* detector markers */}
-            {[
-              { n: 1, x: 190, y: 104 },
-              { n: 2, x: 340, y: 86 },
-              { n: 3, x: 420, y: 72 },
-              { n: 4, x: 300, y: 184 },
-            ].map(d => (
-              <g key={d.n} opacity={on(d.n) ? 1 : 0.3}>
-                <circle cx={d.x} cy={d.y} r={11} fill={d.n === 4 ? 'var(--ok)' : 'var(--brand-1)'} stroke="var(--card)" strokeWidth={2} />
-                <text x={d.x} y={d.y + 4} textAnchor="middle" fontSize={11} fill="#fff" fontWeight={600}>
-                  {d.n}
-                </text>
-              </g>
-            ))}
-          </svg>
-          <p className="px-2 pb-1 text-[11.5px] text-muted-foreground">Dots are money moving. Numbered markers are where each detector fires.</p>
-        </div>
-        <ol className="grid gap-2">
-          {STEPS.map((s, i) => (
-            <li
-              key={s.n}
-              onMouseEnter={() => setStep(s.n)}
-              onMouseLeave={() => setStep(null)}
-              onFocus={() => setStep(s.n)}
-              onBlur={() => setStep(null)}
-              tabIndex={0}
-              className={cn(
-                'enter lift grid cursor-default grid-cols-[32px_1fr] gap-3 rounded-lg border bg-card p-3 shadow-card outline-none',
-                step === s.n && 'border-brand-2/40 bg-brand-soft/40',
-              )}
-              style={{ '--i': i } as React.CSSProperties}
-            >
-              <span className={cn('grid size-8 place-items-center rounded-full text-white', s.n === 4 ? 'bg-ok' : 'bg-brand-1')}>
-                <s.icon className="size-4" />
-              </span>
-              <div>
-                <p className="flex flex-wrap items-center gap-x-2 text-[13.5px] font-medium">
-                  {s.n}. {s.title}
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-normal text-muted-foreground">{s.detector}</span>
-                </p>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">{s.body}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </div>
-    </section>
   )
 }
 
@@ -432,10 +208,16 @@ export function ProofPoints() {
           )
         }
       >
-        The model trains on days 0–5 of {ev ? ev.dataset.rows.toLocaleString('en-IN') : 'the'} payments, picks its threshold on days 6–7, and these are days 8–9 only,
-        scored as they would be live: each payment sees only what came before it. Read them with the note on the data just below. Details and confidence intervals on
-        the <Link href="/model" className="text-brand-2 underline underline-offset-2">model page</Link>.
+        The model trains on days 0–5, picks its threshold on days 6–7, and these are days 8–9 only, scored as live: each payment sees only what came before it.
+        Intervals and caveats on the <Link href="/model" className="text-brand-2 underline underline-offset-2">model page</Link>.
       </SectionTitle>
+      <p className="-mt-1 flex items-start gap-2 rounded-md border bg-muted/40 px-3 py-2 text-[12.5px] leading-relaxed text-muted-foreground">
+        <Scale className="mt-0.5 size-3.5 shrink-0" />
+        <span>
+          <b className="font-medium text-foreground">Why these differ from the live figures above:</b> same definitions, different days. The live strip covers every day
+          replayed so far, including the six the model trained on; these cover only the two it never saw. Quote these.
+        </span>
+      </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {!ev
           ? [0, 1, 2, 3].map(i => <div key={i} className="h-[124px] animate-pulse rounded-lg border bg-card" />)
@@ -507,7 +289,7 @@ export function DetectorCards() {
 
 // ---------------------------------------------------------------------------- what is real
 
-export function RealityGrid({ items }: { items: { part: string; state: string; note: string }[] }) {
+export function RealityGrid({ items, bare }: { items: { part: string; state: string; note: string }[]; bare?: boolean }) {
   const style = (state: string) =>
     state === 'Working'
       ? { icon: CheckCircle2, cls: 'bg-ok-bg text-ok' }
@@ -516,9 +298,13 @@ export function RealityGrid({ items }: { items: { part: string; state: string; n
         : { icon: CircleDashed, cls: 'bg-muted text-muted-foreground' }
   return (
     <section className="grid gap-4">
-      <SectionTitle icon={CheckCircle2} eyebrow="No smoke and mirrors" title="What is real, what is sandboxed, what is not built">
-        Every alert, score and number comes from the Python backend. Nothing is generated in the browser.
-      </SectionTitle>
+      {bare ? (
+        <p className="text-[13px] text-muted-foreground">Every alert, score and number comes from the Python backend. Nothing is generated in the browser.</p>
+      ) : (
+        <SectionTitle icon={CheckCircle2} eyebrow="No smoke and mirrors" title="What is real, what is sandboxed, what is not built">
+          Every alert, score and number comes from the Python backend. Nothing is generated in the browser.
+        </SectionTitle>
+      )}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {items.map((s, i) => {
           const st = style(s.state)
@@ -544,26 +330,29 @@ export function RealityGrid({ items }: { items: { part: string; state: string; n
 
 const GLOSSARY_SHOWN: TermKey[] = ['mule', 'l1 mule', 'l2 mule', 'layering', 'vpa', 'gnn', 'lead time', 'precision', 'recall', 'hold', 'freeze', '1930', 'evidence pack', 'audit trail']
 
-export function GlossaryGrid() {
+export function GlossaryGrid({ bare }: { bare?: boolean }) {
   const [q, setQ] = useState('')
   const shown = GLOSSARY_SHOWN.filter(k => !q || k.includes(q.toLowerCase()) || GLOSSARY[k].toLowerCase().includes(q.toLowerCase()))
+  const search = (
+    <input
+      value={q}
+      onChange={e => setQ(e.target.value)}
+      placeholder="Search terms"
+      className="h-8 w-44 rounded-md border bg-card px-2.5 text-[12.5px] shadow-card outline-none focus:border-brand-2"
+    />
+  )
   return (
     <section className="grid gap-4">
-      <SectionTitle
-        icon={BookOpen}
-        eyebrow="Terms in 30 seconds"
-        title="The vocabulary"
-        right={
-          <input
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            placeholder="Search terms"
-            className="h-8 w-44 rounded-md border bg-card px-2.5 text-[12.5px] shadow-card outline-none focus:border-brand-2"
-          />
-        }
-      >
-        These words have a dotted underline wherever they appear; hover one for its meaning.
-      </SectionTitle>
+      {bare ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[13px] text-muted-foreground">
+          These words have a dotted underline wherever they appear; hover one for its meaning.
+          {search}
+        </div>
+      ) : (
+        <SectionTitle icon={BookOpen} eyebrow="Terms in 30 seconds" title="The vocabulary" right={search}>
+          These words have a dotted underline wherever they appear; hover one for its meaning.
+        </SectionTitle>
+      )}
       <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {shown.map(k => (
           <div key={k} className="rounded-lg border bg-card p-3 shadow-card">
@@ -583,14 +372,30 @@ export function SectionTitle({ icon: Icon, eyebrow, title, children, right }: { 
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <p className="flex items-center gap-1.5 text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <p className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-brand-2">
           <Icon className="size-3.5" /> {eyebrow}
         </p>
-        <h2 className="mt-1 text-[19px] font-semibold tracking-tight">{title}</h2>
-        {children && <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-muted-foreground">{children}</p>}
+        <h2 className="mt-1 text-[22px] font-semibold leading-tight tracking-tight">{title}</h2>
+        {children && <p className="mt-1.5 max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">{children}</p>}
       </div>
       {right}
     </div>
+  )
+}
+
+/** A collapsed section: the title and a one-line hint stay visible, the detail opens on click. */
+function Disclosure({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
+  return (
+    <details className="group rounded-lg border bg-card shadow-card [&[open]>summary]:border-b">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-4 py-3 [&::-webkit-details-marker]:hidden">
+        <span className="text-[14px] font-medium">{title}</span>
+        <span className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
+          {hint}
+          <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
+        </span>
+      </summary>
+      <div className="p-4">{children}</div>
+    </details>
   )
 }
 
@@ -616,32 +421,40 @@ const JOURNEY = [
 
 export function OverviewPage() {
   return (
-    <div className="grid gap-12">
+    <div className="grid gap-14">
       <Hero />
 
       <section className="grid gap-4">
         <SectionTitle
           icon={Activity}
-          eyebrow="Running now"
+          eyebrow="Running now · this replay so far"
           title="The engine, live"
           right={
             <Link href="/console" className="inline-flex items-center gap-1 text-[13px] font-medium text-brand-2 hover:underline">
               Go to the queue <ArrowRight className="size-3.5" />
             </Link>
           }
-        >
-          Hover or tap the (i) on any tile for what it measures.
-        </SectionTitle>
+        />
         <BackendGate allowSnapshot>
           <MetricStrip />
         </BackendGate>
       </section>
 
-      <MuleChainExplainer />
+      <section className="grid gap-4">
+        <SectionTitle icon={Network} eyebrow="Follow the money" title="Who is paying whom, around every alert">
+          The accounts under alert and the money flowing in and out of them, redrawn as payments arrive. Click an account to open its alert.
+        </SectionTitle>
+        <NetworkGraph />
+      </section>
+
+      <section id="test-scam" className="grid scroll-mt-24 gap-4">
+        <SectionTitle icon={Send} eyebrow="Try it" title="Send a test scam and watch the engine respond">
+          Walk a mule chain through the live engine one stage at a time. See which detectors fire, what the GNN scores, and whether the hold stops the money.
+        </SectionTitle>
+        <ScamLab />
+      </section>
 
       <ProofPoints />
-
-      <DataHonesty />
 
       <DetectorCards />
 
@@ -664,9 +477,18 @@ export function OverviewPage() {
         </div>
       </section>
 
-      <RealityGrid items={STATUS} />
-
-      <GlossaryGrid />
+      <section className="grid gap-3">
+        <SectionTitle icon={Scale} eyebrow="Before you quote a number" title="Method, caveats and vocabulary" />
+        <Disclosure title="Where the data comes from, and what the numbers can and cannot claim" hint="Synthetic data · still easier than real traffic">
+          <DataHonesty bare />
+        </Disclosure>
+        <Disclosure title="What is real, what is sandboxed, what is not built" hint={`${STATUS.filter(s => s.state.startsWith('Working')).length} of ${STATUS.length} parts working`}>
+          <RealityGrid items={STATUS} bare />
+        </Disclosure>
+        <Disclosure title="The vocabulary" hint="Mule, lead time, hold, 1930 and more">
+          <GlossaryGrid bare />
+        </Disclosure>
+      </section>
 
       <footer className="border-t pt-4 text-[12px] text-muted-foreground">
         Run it: <code className="font-mono">cd Multi-GNN && python bridge_api.py</code>, then <code className="font-mono">npm run dev</code>. All accounts and
@@ -682,7 +504,7 @@ export function OverviewPage() {
  * The skeptic's question, answered before it is asked. Generator facts are from
  * Multi-GNN/nolambur_v2_gen.py (seed 7); counts come from the evaluation.
  */
-export function DataHonesty() {
+export function DataHonesty({ bare }: { bare?: boolean } = {}) {
   const ev = useEvaluation()
   const fraudRows = ev?.dataset.fraudRows ?? 419
   const rows = ev?.dataset.rows ?? 83067
@@ -727,9 +549,11 @@ export function DataHonesty() {
 
   return (
     <section className="grid gap-4">
-      <SectionTitle icon={Scale} eyebrow="Read this before the numbers" title="Where the data comes from, and what the numbers can and cannot claim">
-        Every account and payment here is synthetic. This is exactly how it was made, and what that means for the figures above.
-      </SectionTitle>
+      {!bare && (
+        <SectionTitle icon={Scale} eyebrow="Read this before the numbers" title="Where the data comes from, and what the numbers can and cannot claim">
+          Every account and payment here is synthetic. This is exactly how it was made, and what that means for the figures above.
+        </SectionTitle>
+      )}
       <div className="grid gap-3 lg:grid-cols-[1fr_1.35fr]">
         <div className="rounded-lg border bg-card p-4 shadow-card">
           <p className="text-[13.5px] font-semibold">How the dataset was generated</p>

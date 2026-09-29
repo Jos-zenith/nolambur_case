@@ -94,9 +94,16 @@ export interface Metrics {
   openAlerts: number
   openBySeverity: Record<Severity, number>
   medianTimeToAlertSec: number | null
+  /** per mule: its first alert to the first scam money leaving it (same definition as /rail/evaluation) */
   medianLeadSec: number | null
+  leadN?: number
+  alertedBeforeMoneyLeft?: number
+  /** account level: alerted labelled accounts that are mules */
   precision: number | null
+  /** rules + model, over mules scam money has reached so far */
   muleRecall: number | null
+  muleRecallRules?: number | null
+  /** mules scam money has reached so far */
   mulesSeen: number
   mulesAlerted: number
   frozenAccounts: number
@@ -347,6 +354,8 @@ export interface RailSnapshotFile {
   metrics: Metrics
   dataset: DatasetFacts
   evaluation: Record<string, unknown>
+  /** /rail/graph/network at capture time; older snapshots lack it */
+  network?: Network
 }
 
 export interface Roles {
@@ -402,4 +411,46 @@ export interface RegistryReport {
   findings: { severity: FindingSeverity; code: string; text: string }[]
   decision: 'approve' | 'review' | 'hold'
   provider: string
+}
+
+/** /rail/graph/network: the money graph around the accounts under alert */
+export interface NetworkNode {
+  id: string
+  vpa: string
+  /** 0 none · 1 delay · 2 hold outbound · 3 full hold · 4 frozen */
+  level: number
+  severity: Severity | null
+  alertId: string | null
+  detector: Detector | null
+  gnnMax: number | null
+  test: boolean
+}
+
+export interface NetworkEdge {
+  source: string
+  target: string
+  amount: number
+  count: number
+  gnnMax: number
+  blocked: boolean
+  lastT: number
+}
+
+export interface Network {
+  simT: number
+  nodes: NetworkNode[]
+  edges: NetworkEdge[]
+  alertedAccounts: number
+  shown: number
+}
+
+/** /rail/demo/scam/{id}: a test mule chain sent through the real ingest path */
+export interface TestScam {
+  id: string
+  stages: number[]
+  payments: { txnId: string; stage: number; from: string; to: string; amount: number; status: 'queued' | 'settled' | 'delayed' | 'blocked'; gnn: number | null }[]
+  alerts: Alert[]
+  accounts: Record<string, { id: string; level: number; action: ActionLevel | 'frozen' }>
+  threshold: number | null
+  paused: boolean
 }
