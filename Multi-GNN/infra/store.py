@@ -136,6 +136,18 @@ stream_checkpoints = Table(
     Column("updated_at", Float, nullable=False),
 )
 
+# Which bridge may read a stream. Kafka divides partitions through its consumer group;
+# Kinesis has no such thing, so a second bridge on the same stream stands by until the
+# holder stops renewing. Works across bridges that share this database (Postgres, or one
+# SQLite file on one machine).
+stream_leases = Table(
+    "stream_leases", metadata,
+    Column("source", String(20), primary_key=True),
+    Column("stream", String(200), primary_key=True),
+    Column("owner", String(120), nullable=False),
+    Column("expires_at", Float, nullable=False),
+)
+
 # Messages a consumer could not parse or validate. Kept so nothing is silently lost and a
 # fixed message can be replayed with POST /rail/ingest/payments.
 dead_letters = Table(
@@ -407,6 +419,32 @@ class Store:
                     values["closed"] = 1
                 if conn.execute(update(stream_checkpoints).where(*where).values(**values)).rowcount == 0:
                     conn.execute(insert(stream_checkpoints).values(source=source, stream=stream, shard=shard, position=positions.get(shard, ""), closed=int(shard in closed), updated_at=now))
+
+    def acquire_lease(self, source: str, stream: str, owner: str, ttl: float) -> tuple[bool, str | None]:
+        """Take or renew the lease. Returns (held, current owner). One conditional UPDATE,
+        so two bridges racing for an expired lease cannot both win."""
+        now = time.time()
+        where = (stream_leases.c.source == source, stream_leases.c.stream == stream)
+        with self.engine.begin() as conn:
+            taken = conn.execute(
+                update(stream_leases).where(*where, (stream_leases.c.owner == owner) | (stream_leases.c.expires_at < now)).values(owner=owner, expires_at=now + ttl)
+            ).rowcount
+            if taken:
+                return True, owner
+            holder = conn.execute(select(stream_leases.c.owner).where(*where)).scalar()
+        if holder is None:
+            try:
+                with self.engine.begin() as conn:
+                    conn.execute(insert(stream_leases).values(source=source, stream=stream, owner=owner, expires_at=now + ttl))
+                return True, owner
+            except Exception:  # another bridge inserted first
+                with self.engine.connect() as conn:
+                    holder = conn.execute(select(stream_leases.c.owner).where(*where)).scalar()
+        return False, holder
+
+    def release_lease(self, source: str, stream: str, owner: str) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(update(stream_leases).where(stream_leases.c.source == source, stream_leases.c.stream == stream, stream_leases.c.owner == owner).values(expires_at=0.0))
 
     def dead_letter(self, source: str, position: str | None, raw: bytes | str | None, error: str) -> None:
         """Once per position: a redelivered poison message is not recorded twice."""

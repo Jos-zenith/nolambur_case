@@ -27,8 +27,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import socket
 import threading
 import time
+import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -278,15 +281,23 @@ class KinesisSource(Source):
     starts at KINESIS_START (TRIM_HORIZON by default, so a first start misses nothing still
     in retention).
 
-    One consumer per stream. Several bridges on one stream would each read every shard;
-    dividing shards between them needs leases (what the KCL does), which this does not do.
+    One reader per stream: bridges sharing a database take a lease (stream_leases) and
+    only the holder reads; the others stand by and take over once it stops renewing for
+    LEASE_TTL seconds. Batches the old holder had in flight may then be read twice (at
+    least once, never lost). Shards are not divided between bridges, as the KCL would.
+    Without a store there is no lease, and each bridge reads every shard.
     """
 
     backend = "kinesis"
     SHARD_REFRESH = 30.0
+    LEASE_TTL = 30.0
+    LEASE_RENEW = 5.0
 
     def __init__(self) -> None:
         super().__init__()
+        self.owner = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:6]}"
+        self.lease: dict[str, Any] = {"owner": self.owner, "held": False, "holder": None, "coordinated": False}
+        self._gen = 0  # bumped when the lease is lost; acks from an older generation are ignored
         self.shards: dict[str, dict[str, Any]] = {}  # shard id -> state shown on /platform
         self._lock = threading.Lock()
         self._acked: dict[str, str] = {}  # shard -> last sequence number the engine processed
@@ -297,7 +308,25 @@ class KinesisSource(Source):
         self._relist = False  # a parent finished: its children can open now
 
     def describe(self) -> dict[str, Any]:
-        return {**super().describe(), "stream": settings.KINESIS_STREAM, "region": settings.AWS_REGION, "endpoint": settings.KINESIS_ENDPOINT or None, "shards": list(self.shards.values())}
+        return {**super().describe(), "stream": settings.KINESIS_STREAM, "region": settings.AWS_REGION, "endpoint": settings.KINESIS_ENDPOINT or None,
+                "shards": list(self.shards.values()), "lease": dict(self.lease)}
+
+    def _hold_lease(self) -> bool:
+        store = _store()
+        if not store:
+            self.lease.update(held=True, holder=self.owner, coordinated=False)
+            return True
+        held, holder = store.acquire_lease("kinesis", settings.KINESIS_STREAM, self.owner, self.LEASE_TTL)
+        if self.lease["held"] and not held:  # lost it: forget in-flight progress, the new holder resumes from the checkpoints
+            with self._lock:
+                self._gen += 1
+                self._acked.clear()
+                self._saved.clear()
+                self._pending.clear()
+                self._closed.clear()
+            self.shards.clear()
+        self.lease.update(held=held, holder=holder, coordinated=True)
+        return held
 
     async def start(self, push: Push, backlog: Backlog) -> None:
         try:
@@ -318,6 +347,8 @@ class KinesisSource(Source):
         return store.checkpoints("kinesis", settings.KINESIS_STREAM) if store else {k: dict(v) for k, v in self._memory_checkpoints.items()}
 
     def _save_checkpoints(self) -> None:
+        if not self.lease["held"]:
+            return
         with self._lock:
             due = {s: q for s, q in self._acked.items() if self._saved.get(s) != q}
             finished = {s for s in self._closed if self._pending[s] == 0}
@@ -405,8 +436,18 @@ class KinesisSource(Source):
         iterators: dict[str, str] = {}
         last_read: dict[str, str] = {}  # last sequence fetched, to reopen an expired iterator without re-reading
         listed_at = 0.0
+        renewed_at = 0.0
         self.state, self.last_error = "listening", None
         while True:
+            if time.monotonic() - renewed_at > self.LEASE_RENEW:
+                if not self._hold_lease():
+                    iterators.clear()
+                    last_read.clear()
+                    self.state = f"standby (stream read by {self.lease['holder']})"
+                    time.sleep(self.LEASE_RENEW)
+                    continue
+                renewed_at = time.monotonic()
+
             if time.monotonic() - listed_at > self.SHARD_REFRESH or not iterators or self._relist:
                 self._relist = False
                 self._open_ready_shards(client, iterators)
@@ -448,10 +489,11 @@ class KinesisSource(Source):
                     seq = records[-1]["SequenceNumber"]
                     last_read[sid] = seq
 
-                    def ack(sid=sid, seq=seq, n=len(payments)) -> None:
+                    def ack(sid=sid, seq=seq, n=len(payments), gen=self._gen) -> None:
                         with self._lock:
-                            self._acked[sid] = seq  # one shard's batches are acked in inbox (FIFO) order
-                            self._pending[sid] -= 1
+                            if gen == self._gen:  # else the lease was lost since this was read
+                                self._acked[sid] = seq  # one shard's batches are acked in inbox (FIFO) order
+                                self._pending[sid] -= 1
                         self.acked += n
 
                     with self._lock:
