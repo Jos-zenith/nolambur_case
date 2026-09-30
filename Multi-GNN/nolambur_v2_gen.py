@@ -32,6 +32,8 @@ their mules' camouflage is drawn, so with --scope test days 0-7 are byte-identic
     redraw  base behaviour on the variants' own random stream: the control for the others
     fast    mules forward within about a minute (median 25 s), payments seconds apart
     struct  3x the victims, each paying a third as much per day, every hop in ₹2-5k payments
+    struct4 struct, but no first-layer mule takes money from more than 4 victims: the ring opens
+            extra fresh mule accounts (no history) to stay under a "5+ new payers" rule
     low     every fraud amount (and the forwarding floors) multiplied by --scale
     python nolambur_v2_gen.py --variant low --scale 0.1 --scope test --out data/variants/low_0.1/nolambur_v2
 """
@@ -52,7 +54,7 @@ SEED = 7
 DAYS = 10
 BASE = datetime(2024, 3, 11, 0, 0, 0)
 _cli = argparse.ArgumentParser(description="Nolambur v2 generator")
-_cli.add_argument("--variant", choices=["base", "redraw", "fast", "struct", "low"], default="base")
+_cli.add_argument("--variant", choices=["base", "redraw", "fast", "struct", "struct4", "low"], default="base")
 _cli.add_argument("--scale", type=float, default=1.0, help="low: multiply every fraud amount by this")
 _cli.add_argument("--scope", choices=["test", "all"], default="test", help="campaigns the variant applies to: test (days 8-9) or all")
 _cli.add_argument("--stream", type=int, default=1, help="random stream for the variant campaigns: 1 = the original draws, 2+ = fresh ones")
@@ -210,11 +212,11 @@ def campaign_flows(cid: str, t0: datetime, l1: list[dict], l2: list[dict], vs: l
         t = t0 + timedelta(minutes=float(rng.uniform(0, 90)))
         for d in range(days_paying):
             day_total, budget = 0.0, VICTIM_DAILY_CAP
-            if kind == "struct":  # a third of the money per victim, in ₹2-5k payments
+            if kind in ("struct", "struct4"):  # a third of the money per victim, in ₹2-5k payments
                 budget = VICTIM_DAILY_CAP / 3
                 while budget >= 2_000:
                     amt = min(budget, float(rng.uniform(2_000, 5_000)))
-                    mule = l1[int(rng.integers(0, len(l1)))]
+                    mule = l1[vs.index(v) // 4] if kind == "struct4" else l1[int(rng.integers(0, len(l1)))]
                     pay(v, mule, amt, t, "P2P", True, "L0→L1", cid)
                     inbound[mule["id"]].append((t, amt))
                     budget -= amt
@@ -250,9 +252,9 @@ def campaign_flows(cid: str, t0: datetime, l1: list[dict], l2: list[dict], vs: l
                 delay = rng.lognormal(math.log(150 if patient else 8), 0.6)  # minutes
             t_out = t_in + timedelta(minutes=float(delay))
             remaining = amt_in * rng.uniform(0.75, 0.97)
-            floor = 2_000 if kind == "struct" else 3_000 * scale
+            floor = 2_000 if kind in ("struct", "struct4") else 3_000 * scale
             while remaining > floor:
-                if kind == "struct":
+                if kind in ("struct", "struct4"):
                     amt = min(remaining, float(rng.uniform(2_000, 5_000)))
                 else:
                     amt = min(remaining, lognormal(30_000 * scale, 0.6, 5_000 * scale, P2P_CAP))
@@ -274,9 +276,9 @@ def campaign_flows(cid: str, t0: datetime, l1: list[dict], l2: list[dict], vs: l
             if kind == "fast":  # straight after the first receipt
                 t_out = first_in[m["id"]] + timedelta(minutes=float(rng.lognormal(math.log(25 / 60), 0.8)))
             remaining = received[m["id"]] * rng.uniform(0.5, 0.9)
-            floor = 2_000 if kind == "struct" else 3_000 * scale
+            floor = 2_000 if kind in ("struct", "struct4") else 3_000 * scale
             while remaining > floor:
-                if kind == "struct":
+                if kind in ("struct", "struct4"):
                     amt = min(remaining, float(rng.uniform(2_000, 5_000)))
                 else:
                     amt = min(remaining, lognormal(20_000 * scale, 0.6, 3_000 * scale, P2P_CAP))
@@ -319,12 +321,18 @@ for c, start in enumerate(CAMPAIGN_STARTS, 1):
         del txns[mark:]
         ref[0] = ref0
         main_rng, rng = rng, np.random.default_rng([SEED, c, ARGS.stream])
-        if kind == "struct":  # 3x the victims; the extras stay out of victim_ids, which later draws read
+        if kind in ("struct", "struct4"):  # 3x the victims; the extras stay out of victim_ids, which later draws read
             taken = {v["id"] for v in vs}
             extra = [p for p in pool if p["id"] not in taken]
             more = [extra[i] for i in rng.choice(len(extra), 2 * len(vs), replace=False)]
             victims += more
             vs = vs + more
+        if kind == "struct4":  # at most 4 victims per first-layer mule; extra mules are fresh (no camouflage)
+            need = -(-len(vs) // 4) - len(l1)
+            if need > 0:
+                fresh = [account("l1_mule", "individual", str(rng.choice(MULE_STATES))) for _ in range(need)]
+                mules_l1 += fresh
+                l1 = l1 + fresh
         campaign_flows(cid, t0, l1, l2, vs, kind, scale)
         rng = main_rng
 

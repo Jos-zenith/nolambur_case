@@ -304,6 +304,7 @@ class RailEngine:
         self.model_threshold = model_threshold
         self.rules = os.getenv("RAIL_RULES", RULE_VERSION)
         self.model_friction = os.getenv("RAIL_MODEL_FRICTION", "0") == "1"
+        self.hop_rule = os.getenv("RAIL_HOP_FROM_FLAGGED", "1") != "0"  # 0: the hop detector is off (reports/README.md 3.4)
         speed = speed if speed is not None else float(data.meta.get("defaultSpeed", 4.0))
         self.record_actions = record_actions
         self.speed = speed
@@ -492,7 +493,8 @@ class RailEngine:
         if self.rules == "r2.1":
             self._check_fan_in(r)
         self._check_pass_through(r)
-        self._check_hop_from_flagged(r)
+        if self.hop_rule:
+            self._check_hop_from_flagged(r)
         self._check_model_only(r)
 
     def _alerts_on(self, account_id: str) -> list[Alert]:
@@ -1684,6 +1686,7 @@ def evaluate_temporal(data: Dataset, model_threshold: float | None = None) -> di
         "secondsToAlert": {"n": len(to_alert), "median": _pct(to_alert, 0.5), "p90": _pct(to_alert, 0.9), "note": "first fraud inflow to a mule until its first alert"},
         "ruleVersion": offline.rules,
         "modelFriction": offline.model_friction,
+        "hopFromFlagged": offline.hop_rule,
     }
 
     del offline  # two whole-dataset replays at once do not fit a 512 MB instance

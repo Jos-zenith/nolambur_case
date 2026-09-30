@@ -45,6 +45,7 @@ VARIANT_ROOT = ROOT / "data" / "variants"
 REPORT = ROOT / "reports" / "stress_v2.json"
 RULES_REPORT = ROOT / "reports" / "rules_r21.json"
 RULE_ARMS = (("r2.0", False), ("r2.1", False), ("r2.1", True))  # (RAIL_RULES, model friction)
+NOHOP_REPORT = ROOT / "reports" / "rules_r21_nohop.json"
 REPORTED_FACTOR = 514.0  # reported UPI fraud is ~514x rarer than the test-day payments (ablation_v2.json)
 SPLIT_DAYS = {"train": [0, 6], "val": [6, 8], "test": [8, 10]}
 
@@ -53,6 +54,7 @@ VARIANTS: dict[str, list[str]] = {
     "redraw": ["--variant", "redraw"],
     "fast": ["--variant", "fast"],
     "struct": ["--variant", "struct"],
+    "struct4": ["--variant", "struct4"],
     "low_0.5": ["--variant", "low", "--scale", "0.5"],
     "low_0.2": ["--variant", "low", "--scale", "0.2"],
     "low_0.1": ["--variant", "low", "--scale", "0.1"],
@@ -174,20 +176,21 @@ def report() -> dict[str, Any]:
     return out
 
 
-def _with_rules(rules: str, friction: bool):
+def _with_rules(rules: str, friction: bool, hop: bool = True):
     """RailEngine reads these at construction; set them for one arm."""
     import os
 
     os.environ["RAIL_RULES"] = rules
     os.environ["RAIL_MODEL_FRICTION"] = "1" if friction else "0"
+    os.environ["RAIL_HOP_FROM_FLAGGED"] = "1" if hop else "0"
 
 
-def clean_cost(rules: str) -> dict[str, Any]:
+def clean_cost(rules: str, hop: bool = True) -> dict[str, Any]:
     """False accounts a day over days 1-9 of the base data: alerted accounts that are not mules.
     Alert-only replay; day 0 is skipped because every payer is new on the first day."""
     import rail_engine as re_
 
-    _with_rules(rules, False)
+    _with_rules(rules, False, hop)
     spec = online.DATASETS["v2"]
     raw, labels = pd.read_csv(spec["raw"]), pd.read_csv(spec["labels"])
     data = re_.Dataset(raw, np.load(spec["dir"] / "online_scores.npy"), labels,
@@ -211,7 +214,7 @@ def clean_cost(rules: str) -> dict[str, Any]:
     rule_false = [x for x in false if x[1] != "model_only"]
     del data, eng
     gc.collect()
-    return {"rules": rules, "days": days, "falseAccounts": len(false), "falsePerDay": len(false) / days,
+    return {"rules": rules, "hopFromFlagged": hop, "days": days, "falseAccounts": len(false), "falsePerDay": len(false) / days,
             "falsePerAnalystPerDay": len(false) / days / 2, "ruleFalsePerDay": len(rule_false) / days,
             "byFirstDetector": by_det, "byKind": by_kind}
 
@@ -255,9 +258,49 @@ def rules_report() -> dict[str, Any]:
     return out
 
 
+def nohop_report() -> dict[str, Any]:
+    """reports/README.md 3.4 follow-ups: r2.1 without hop-from-flagged (+/- friction) on everything
+    rules_report covered, and struct4 (stream 4) under r2.0, r2.1 and r2.1 without hop."""
+    base = online.DATASETS["v2"]
+    datasets = [("base", "base", base["raw"], base["labels"], base["dir"] / "online_scores.npy")]
+    for stream, label in ((1, "original"), (2, "fresh")):
+        for name in VARIANTS:
+            path = scores_path(name, "frozen", "test", stream)
+            if name != "struct4" and path.exists():
+                d = variant_dir(name, "test", stream)
+                datasets.append((name, label, d / "transactions.csv", d / "labels.csv", path))
+    d4 = variant_dir("struct4", "test", 4)
+    struct4 = ("struct4", "fresh (stream 4)", d4 / "transactions.csv", d4 / "labels.csv", scores_path("struct4", "frozen", "test", 4))
+    nohop_arms = (("r2.1", False, False), ("r2.1", True, False))
+    all_arms = (("r2.0", False, True), ("r2.1", False, True), ("r2.1", True, True), *nohop_arms)
+    rows: dict[str, Any] = {}
+    for name, draw, raw_path, labels_path, path, arms in [(*x, nohop_arms) for x in datasets] + [(*struct4, all_arms)]:
+        raw, labels = pd.read_csv(raw_path), pd.read_csv(labels_path)
+        scores = np.load(path)
+        for rules, friction, hop in arms:
+            arm = rules + ("" if hop else " - hop") + (" + friction" if friction else "")
+            print(f"measuring {name} ({draw}) with {arm} ...", flush=True)
+            _with_rules(rules, friction, hop)
+            m = measure(raw, labels, scores)
+            c = m["counts"]
+            m["falsePerMuleAt514x"] = (c["falseAccounts"] / c["mulesFound"] * REPORTED_FACTOR) if c["mulesFound"] else None
+            rows[f"{name}/{draw}/{arm}"] = {"variant": name, "draw": draw, "arm": arm, "fraud": fraud_profile(raw), **m}
+    cost = [clean_cost("r2.1", hop=False)]
+    _with_rules("r2.0", False)
+    out = {
+        "createdAt": datetime.now().isoformat(timespec="seconds"),
+        "protocol": "reports/README.md 3.4 follow-up checks, fixed before running; frozen production model and threshold",
+        "reportedFactor": REPORTED_FACTOR,
+        "cleanCost": cost,
+        "rows": rows,
+    }
+    NOHOP_REPORT.write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")
+    return out
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("cmd", choices=["gen", "score", "report", "rules"])
+    parser.add_argument("cmd", choices=["gen", "score", "report", "rules", "nohop"])
     parser.add_argument("--stream", type=int, default=1, help="gen/score: 1 = the original draws, 2+ = fresh ones")
     parser.add_argument("--variant", nargs="*", default=list(VARIANTS))
     parser.add_argument("--scope", choices=["test", "all"], default="test")
@@ -271,6 +314,9 @@ def main(argv: list[str] | None = None) -> None:
             print(json.dumps(score(name, args.model, args.scope, args.checkpoint, args.stream), indent=2))
     elif args.cmd == "rules":
         out = rules_report()
+        print(json.dumps(out["cleanCost"], indent=2))
+    elif args.cmd == "nohop":
+        out = nohop_report()
         print(json.dumps(out["cleanCost"], indent=2))
     else:
         out = report()

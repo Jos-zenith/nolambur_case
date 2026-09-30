@@ -313,17 +313,77 @@ The fresh-draw numbers below come from the commit tagged `eval-r21-fresh`.
 - **Its biggest effect is on fast mules** (r2.1 alone vs r2.1 + friction: 16% → 33% fresh, 27% → 49% original). It is the only mechanism here that holds back a mule's *first* forward, because it acts the moment the model scores the inflow.
 - **The cost was 1 innocent account delayed for about 2 hours per run,** and at most ₹6,000 of genuine money delayed and then released.
 - It never blocks anything by itself.
+- **The friction figures are an upper-end estimate, not a measured outcome.** Money counts as stopped only if a rule escalates the account during the delay. The simulation has no victims or analysts acting in that hour, and the cost figures come from a handful of runs on synthetic traffic.
+- **Delaying a real customer's settlement needs sign-off.** It has legal and operational implications (merchant agreements, RBI rules on settlement timelines, customer communication) that need a partner bank's or PA's approval before any pilot.
+
+**The trade in one line:** on fresh draws r2.1 raises recall (structuring 33% to 94%, low ×0.2 0% to 37%) and cuts precision on every draw (to 39-50%).
+
+**The new-payers detector has a fixed threshold.** "5 or more" sits at the 99.9th percentile of clean traffic, and the structuring variant it catches 26 of 26 on was built by the same person who wrote the detector. An adversary who reads the rule and uses 4 payers per account walks under it. The `struct4` check below measures how far detection degrades when that happens.
 
 **Verdict on r2.1:**
 - **Worth shipping:**
   - the new-payers detector (precise, cheap, independent of amounts)
   - the relative floor for the primary pass-through rule
   - friction
+  - *Revised after the follow-up checks below: dropping hop-from-flagged is not enough on its own. See the revised verdict.*
 - **Not worth shipping as it stands:** the queue cost, driven by hop-from-flagged.
 - **The next version (r2.2) should be designed now and judged on another fresh stream (3):**
   - hop-from-flagged only for individuals' accounts
   - only when the flagged sender's money is a large share of the recipient's inflow
 - **It is not applied here.** Doing so after seeing these draws would be tuning to the test.
+
+**Follow-up checks, fixed before running.**
+
+1. **The configuration recommended below has not been measured.** It is r2.1 without hop-from-flagged, with and without friction. The headline r2.1 numbers include hop-from-flagged, so this configuration is replayed on the same base data, original draws and fresh draws (`RAIL_HOP_FROM_FLAGGED=0`), and its clean-traffic cost is measured the same way.
+   - If recall holds and the queue shrinks, the verdict stands.
+   - If recall drops sharply, the hop rule was doing needed work, and r2.2 moves up the list.
+2. **An adversary who knows the fan-in threshold.** Variant `struct4` is structuring in which every first-layer mule takes money from at most 4 victims. The ring opens extra fresh mule accounts to spread the victims, so it stays under "5 or more new payers".
+   - It uses its own stream (4), so stream 3 stays reserved.
+   - It is scored with the frozen model and judged on the same five metrics under r2.0, r2.1, and r2.1 without hop.
+
+**Follow-up results (`rules_r21_nohop.json`).**
+
+**1. r2.1 without hop-from-flagged.** Fresh draws, rules + model:
+
+| Variant | Recall: r2.0 / r2.1 / r2.1 − hop | Precision: r2.0 / r2.1 / r2.1 − hop | Money stopped, r2.1 / r2.1 − hop (no friction) |
+|---|---|---|---|
+| redraw | 67% / 78% / 67% | 78% / 46% / **90%** | 23% / 23% |
+| fast | 62% / 69% / 62% | 76% / 44% / **89%** | 16% / 16% |
+| struct | 33% / 94% / **79%** | 55% / 43% / **93%** | 20% / 19% |
+| low ×0.5 | 37% / 56% / 44% | 91% / 50% / 86% | 11% / 11% |
+| low ×0.2 | 0% / 37% / **11%** | — / 48% / 60% | 9% / 9% |
+
+**Clean-traffic queue** (base data, days 1–9): r2.0 6.2, r2.1 18.0, and **r2.1 − hop 8.3 false accounts a day** (4.2 per analyst).
+- The rest of the cost is mostly the relative pass-through floor firing on businesses that forward their takings (34 false accounts in 9 days). False accounts by type: 38 businesses, 26 individuals, 8 suppliers, 3 merchants.
+- Model-only leads account for most of the remainder.
+- At ~500× rarer mules, r2.1 − hop gives about 35–100 false accounts per real mule on most draws, and 340–510 on the ×0.2 draws, where it finds very few mules. That compares with ~510–810 for r2.1 and ~50–420 for r2.0.
+
+**What that shows:**
+- **Hop-from-flagged is the main false-alert source in r2.0 as well.** Without it, precision on the test days is 83–94% on every draw.
+- **It is also where much of the recall comes from.** Its catches are the second-layer mules, those that only receive from a flagged account.
+- Without it, r2.1's gains shrink:
+  - Structuring keeps most of its gain (33% → 79%, from the new-payers rule).
+  - The redraw and fast draws fall back to r2.0's recall.
+  - The ×0.2 ring mostly disappears again (37% → 11%).
+  - Holds stop about the same money, because hop alerts rarely led to holds.
+
+**2. The 4-payer adversary** (`struct4`, stream 4). Every first-layer mule takes money from at most 4 victims.
+
+| | r2.0 | r2.1 | r2.1 − hop |
+|---|---|---|---|
+| Recall | 68% (21/31) | 84% (26/31) | **42% (13/31)** |
+| Precision | 68% | 50% | 87% |
+| New-payers alerts (mules / alerts) | — | 9 / 9 | 9 / 9 |
+| Money stopped | 0% | 19% | 19% |
+
+- **The new-payers rule degrades as expected, but not to zero.** It drops from 26 alerts on plain structuring to 9, all real mules: 7 second-layer mules that still received from 5 or more new payers, and 2 first-layer.
+- **Most first-layer mules are caught by pass-through instead.** Four victims at up to ₹33,000 a day still clears the ₹28,000 cold-start floor (all 8 of its alerts are mules, 6 first-layer and 2 second-layer; one of them was not active on the test days, so it counts as 7 of 8).
+- **Without hop-from-flagged, recall halves.** The 4-payer evasion mainly costs second-layer coverage, which only hop provided.
+
+**Revised verdict.**
+- **"r2.1 − hop" is not the answer on its own.** It buys precision (83–94%) and a small queue (8.3 a day) by giving back second-layer recall, and it halves recall against the 4-payer adversary.
+- **r2.2 is justified.** The case is now measured, not guessed: a hop rule that keeps second-layer coverage without flagging every shop a mule pays.
+- **That still doesn't fix the base-rate problem.** Even the most precise configuration here is ~35–100 false accounts per real mule at ~500× rarer fraud. That is a job for the agreement policy (restrict only on agreement or outside confirmation), shadow-mode calibration and queue sizing, not for rule tweaks.
 
 **The stated limit, updated.**
 - r2.0's rules find nothing once a ring's payments fall to a median of about ₹12,000; the model still finds about a third of mules there, and nothing at about ₹5,000.

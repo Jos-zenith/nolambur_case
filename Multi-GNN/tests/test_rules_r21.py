@@ -94,3 +94,17 @@ def test_friction_delays_a_confident_model_only_lead(rules):
     assert eng.held["mule"]["level"] == 1
     out = next(r for r in eng.replayed if r.from_id == "mule")
     assert out.delayed and not out.blocked
+
+
+def test_hop_rule_can_be_switched_off(monkeypatch):
+    """RAIL_HOP_FROM_FLAGGED=0: the next hop after a flagged mule is no longer alerted."""
+    def stream() -> Stream:
+        s = Stream()
+        for i in range(5):
+            s.pay(f"victim{i}", "mule", 99_999, T0 + timedelta(minutes=35 * i), fraud=1)
+        s.pay("mule", "next", 90_000, T0 + timedelta(hours=4), fraud=1)
+        return s
+    monkeypatch.setenv("RAIL_RULES", "r2.1")
+    assert "hop_from_flagged" in detectors(stream().engine(), "next")
+    monkeypatch.setenv("RAIL_HOP_FROM_FLAGGED", "0")
+    assert "hop_from_flagged" not in detectors(stream().engine(), "next")
