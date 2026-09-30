@@ -40,6 +40,8 @@ So the 2-hop GNN does not apply here. From the PA's side, the graph is a star of
   - Stream 2 is the judging draw.
   - Stream 3 stays reserved.
 
+**Fix before any evaluation (2026-10-01).** The first calibration showed local merchants never received a first-time payer from another state, which would make D2 trivially perfect. That's a generator artefact, so the clean world now has 5% of payments made while travelling, to a local merchant anywhere. No detector result had been computed at that point.
+
 ## Scenarios
 
 **S1: Fake or rented merchant as a mule endpoint.**

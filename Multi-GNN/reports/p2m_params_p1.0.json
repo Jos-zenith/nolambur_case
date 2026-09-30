@@ -1,0 +1,28 @@
+{
+  "rules": "p1.0",
+  "catP99": {
+    "education": 35838.38000000001,
+    "electronics": 49297.5,
+    "fuel": 2578.0599999999986,
+    "kirana": 1639.08,
+    "online_services": 7323.08000000006,
+    "pharmacy": 2433.3599999999997,
+    "restaurant": 2135.520000000002,
+    "subscription": 1206.5599999999995,
+    "travel": 27932.320000000014,
+    "utility_biller": 6727.920000000004
+  },
+  "d1Count": 3,
+  "d2States": 6,
+  "d3Requests": 14,
+  "d3FailShare": 0.692,
+  "basis": {
+    "merchantDays": 1192,
+    "firstAboveMax": 2,
+    "localStatesMax": 5,
+    "collectMerchantDays": 30,
+    "collectNewP999": 13.971000000000004,
+    "collectFailP999": 0.6417857142857144,
+    "note": "train days 3-5 (after a 3-day first-payer warm-up), clean merchants only; each detector fires above the p99.9 of these merchant-days; the fail-share bar is p99.9 + 0.05"
+  }
+}
