@@ -1,0 +1,95 @@
+{
+  "label": "development",
+  "rules": "p1.0",
+  "folder": "data\\p2m\\s1\\nolambur_p2m",
+  "recall": 1.0,
+  "activeFraudMerchants": 5,
+  "activeFlagged": 5,
+  "precision": 0.42857142857142855,
+  "merchantsCounted": 14,
+  "fraudCounted": 6,
+  "frontsFlagged": 2,
+  "falseMerchants": 8,
+  "fraudInflow": 4250315.0,
+  "fraudHeldBeforeSettlement": 4015614.0,
+  "fraudHeldShare": 0.9447803280462742,
+  "medianSecondsToAlert": -99330.0,
+  "flaggedBeforeFirstBatch": 5,
+  "genuineHeld": 13413.0,
+  "secondary": {
+    "note": "added after the development run: D4 fires at onboarding, so it dominates timing and its reviews on family businesses dominate precision",
+    "holdDetectorsRecall": 1.0,
+    "holdDetectorsPrecision": 1.0,
+    "holdDetectorsCounted": 4,
+    "medianSecondsToHoldAlert": 5183.0,
+    "d4Only": {
+      "fraudMerchantsCounted": 2,
+      "cleanMerchantsCounted": 8
+    }
+  },
+  "byMerchant": [
+    {
+      "merchant": "06a24255ee0a",
+      "scenario": "S1+S3",
+      "category": "online_services",
+      "detectors": [
+        "D1",
+        "D4"
+      ],
+      "secondsToAlert": -724638.0
+    },
+    {
+      "merchant": "071280a45ec9",
+      "scenario": "S2",
+      "category": "subscription",
+      "detectors": [
+        "D1",
+        "D3"
+      ],
+      "secondsToAlert": -99330.0
+    },
+    {
+      "merchant": "1a7149b3a5f9",
+      "scenario": "S1+S3",
+      "category": "pharmacy",
+      "detectors": [
+        "D1",
+        "D2",
+        "D4"
+      ],
+      "secondsToAlert": -708579.0
+    },
+    {
+      "merchant": "28d7c859a298",
+      "scenario": "S2",
+      "category": "subscription",
+      "detectors": [
+        "D1",
+        "D3"
+      ],
+      "secondsToAlert": 4177.0
+    },
+    {
+      "merchant": "4971353cfad0",
+      "scenario": "S2",
+      "category": "subscription",
+      "detectors": [
+        "D1",
+        "D3"
+      ],
+      "secondsToAlert": 5240.0
+    }
+  ],
+  "cleanCost": {
+    "window": "days 1-9",
+    "falseMerchantsPerDay": 0.2222222222222222,
+    "byFirstDetector": {
+      "D4": 8,
+      "D2": 3
+    },
+    "d4ReviewsOnCleanMerchants": 8,
+    "cleanHoldMerchantHours": 66.05166666666666,
+    "falsePerRealAtReportedRate": 2333.6326027256646,
+    "reportedFactor": 1750.2244520442487
+  }
+}

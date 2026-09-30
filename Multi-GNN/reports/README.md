@@ -11,6 +11,8 @@ Every number here comes from a JSON file in this folder, written by the code tha
 | `ablation_v2.json` | `python -m infra.ablation report` |
 | `stress_v2.json` | `python -m infra.stress report` |
 | `rules_r21.json` | `python -m infra.stress rules` |
+| `rules_r21_nohop.json` | `python -m infra.stress nohop` |
+| `p2m_params_p1.0.json`, `p2m/*.json` | `python -m infra.p2m calibrate` / `evaluate` |
 
 **The data is synthetic.** Nothing here is evidence about real payment traffic. The only such evidence would come from shadow mode on a partner's anonymised flows (see the end of this report).
 
@@ -390,6 +392,56 @@ The fresh-draw numbers below come from the commit tagged `eval-r21-fresh`.
 - r2.1 finds a third of mules at a median of about ₹5,000.
 - **Below a median of about ₹2,500 a payment (largest ₹10,000), neither version detects the ring,** and r2.1 only adds false alerts.
 
+### 3.5 Aggregator-side fraud (P2M)
+
+**Design and protocol:** `P2M_DESIGN.md`, committed before any P2M code. **Code:** `p2m_gen.py` and `infra/p2m.py`, committed with the calibrated parameters (`p2m_params_p1.0.json`) before any detector result existed. **Results:** `reports/p2m/*.json`.
+
+This is the aggregator's own view: P2M payments into its merchants, its merchants' collect requests with their outcomes, its settlement batches, and its onboarding records. Nothing after settlement is visible, so the GNN does not apply; these are rules.
+
+**Parameters, from train days 3–5, clean merchants only:**
+- **D1 (big tickets):** 3 or more first-time payers at or above the category's 99th-percentile ticket within 24 h. The p99 ticket ranges from ₹1,207 (subscriptions) to ₹49,298 (electronics).
+- **D2 (payer spread):** first-time payers from 6 or more other states into a local-category merchant within 24 h.
+- **D3 (collect pattern):** 14 or more collect requests to non-customers within 24 h, with at least 69% declined or expired.
+- **D4 (shared settlement):** one settlement account behind merchants with different declared legal entities. D4 opens a review; D1–D3 hold the merchant's settlement for 24 h.
+
+**Results.** Test days, every draw run so far. Stream 1 was for development; streams 2, 4 and 5 are fresh.
+
+| Draw | Active fraud merchants flagged | Precision, all detectors | Precision, hold detectors (D1–D3) | Rings (fronts flagged) | Fraud money held at a settlement batch | Median first-fraud → first hold alert |
+|---|---|---|---|---|---|---|
+| development (1) | 5/5 | 43% (6/14) | 100% (4/4) | 1 ring (2 fronts) | 94% | 86 min |
+| fresh 2 | 5/5 | 33% (4/12) | 100% (4/4) | none in this draw | 68% | 58 min |
+| fresh 4 | 3/3 | 33% (4/12) | 100% | 1 ring (2 fronts) | 68% | 107 min |
+| fresh 5 | 3/3 | 33% (4/12) | 100% | 1 ring (2 fronts) | 63% | 103 min |
+
+Streams 4 and 5 were added after stream 2 turned out to contain no ring. That decision was recorded in `P2M_DESIGN.md` before they were generated.
+
+**Where the numbers come from:**
+- **Every active fraud merchant was flagged before the settlement batch that would have paid out its first fraud money.**
+- **"Held" means held at least once.** With nobody acting, a hold lifts after 24 h (72 h with D4), and the money settles in a later batch. So "held" is the window an analyst had, not money recovered.
+- **D4 caught every ring member at onboarding, fronts included,** days before any fraud. That is the onboarding module's first fraud data.
+- **D4 also flagged all 8 legitimate family-business merchants.** Two proprietorships sharing one bank account look exactly like a ring from the aggregator's records. That is why all-detector precision is 33–43%, and why D4 opens a review rather than a hold.
+
+**Cost on clean traffic** (identical in every draw, since clean traffic doesn't change with the stream):
+- **Holds:** 2–3 false merchants in 9 days, all D2, from travellers paying local shops. That is about 0.5 false holds per 1,000 merchants a day, 66 merchant-hours of held settlement, and ₹6,000–26,000 of genuine money held per test window.
+- **Reviews:** 8 D4 reviews, one-off at onboarding (1.9% of merchants).
+
+**The low-value sweep** (fresh stream 2, S1 amounts scaled; S2 unchanged):
+
+| S1 scale | Active flagged | Fraud money held | What was lost |
+|---|---|---|---|
+| ×1 | 5/5 | 68% | — |
+| ×0.5 | 4/5 | 35% | The electronics fake merchant. Its victim payments (median ~₹17,500) no longer reach electronics' p99 of ₹49,298. |
+| ×0.2 | 4/5 | 37% | Same |
+| ×0.1 | 4/5 | 36% | Same. The kirana fake merchant is still caught, later (12 h rather than 5 h), because ₹3,500 is still above kirana's p99 of ₹1,639. |
+
+**Stated limits:**
+- **The scenarios are easy by construction.** Victim payments of ₹10,000+ into categories whose 99th-percentile ticket is ₹1,200–7,300 are exactly what D1 looks for, and the same person wrote the scenarios and the detectors.
+- **A fake merchant in a high-ticket category is hard to see.** Electronics, travel and education have p99 tickets of ₹28,000–49,000. D1 misses such a merchant once its payments sit under the category's p99, and D2 applies to local categories only.
+- **A collect scam can stay under D3.** It would need fewer than 14 requests a day per merchant VPA, spread across many VPAs, or a much higher approval rate.
+- **One "active" merchant in every draw is not fresh.** It is the validation campaign's collect scammer, still running on day 8 and identical across draws. The fresh evidence is 2–4 merchants per draw: the test sets are tiny, and the percentages above are counts of a handful.
+- **The projection to real fraud rates is not meaningful here.** The JSON's `falsePerRealAtReportedRate` (2,300–3,800) multiplies a merchant-level count by a payment-level factor. The usable cost figures are the ones above: false holds per 1,000 merchants a day, and D4 reviews as a share of onboardings.
+- **Company and director (MCA) linkage is not tested.** The registry stays empty; S3 is detected from the aggregator's own onboarding records only.
+
 ## 4. Throughput and latency
 
 **Hardware.** 12th Gen Intel Core i7-1255U, a 15 W laptop chip with 10 cores and 12 threads, 15.7 GB RAM, torch on CPU. A laptop, not a server: read these as a floor.
@@ -431,7 +483,7 @@ Payment latency is half a tick of batching (250 ms) plus the batch's processing 
 - **The test set is small.** Two campaigns, 26 mules. The intervals above are wide for that reason.
 - **Small rings evade everything.** Below a median of about ₹2,500 a payment (largest ₹10,000), neither rules version nor the model, even retrained, detects the ring. At about ₹5,000, r2.1 finds a third of the mules and r2.0 finds none (sections 3.3 and 3.4).
 - **The base rate is high.** Fraud is 0.35% of test-day payments, about 500× the reported UPI rate. Precision would fall steeply (section 3.2).
-- **The graph is incomplete.** A payment aggregator sees only its own merchants' flows, while mule chains cross banks and PSPs. This engine sees one slice of the graph.
+- **The graph is incomplete.** A payment aggregator sees only its own merchants' flows, while mule chains cross banks and PSPs. This engine sees one slice of the graph. The P2P results (sections 2 and 3.1–3.4) assume a view of mule chains that an aggregator does not have. Section 3.5 evaluates the aggregator's own view (P2M payments, collect requests, settlement and onboarding), where the GNN does not apply.
 
 **Shadow mode is the test that is missing.** Run the engine silently on one partner's anonymised flows for a few weeks. Log every alert and every would-be restriction. Then compare against the fraud reports and chargebacks that arrive later. That measures precision, recall and lead time on real traffic. Nothing here does.
 

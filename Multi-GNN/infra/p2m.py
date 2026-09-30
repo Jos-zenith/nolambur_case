@@ -294,7 +294,25 @@ def evaluate(data: Data, params: dict[str, Any], label: str) -> dict[str, Any]:
             by_det_clean[a["detector"]] += 1
     d4_review = sum(1 for m, t in clean_first.items() if dets[m] == {"D4"})
     clean_days = [m for m, t in clean_first.items() if s0 + DAY <= t < t1 and dets[m] != {"D4"}]
-    clean_hold_hours = sum((min(until, t1) - max(t, s0 + DAY)) / 3600 for m, t, until in eng.hold_log if m not in fraud_m and until > s0 + DAY and t < t1)
+    clean_hold_hours = 0.0  # merged per merchant: an extended hold is one interval, not two
+    spans: dict[str, list] = defaultdict(list)
+    for m, t, until in eng.hold_log:
+        if m not in fraud_m:
+            spans[m].append((max(t, s0 + DAY), min(until, t1)))
+    for m, iv in spans.items():
+        end = -math.inf
+        for a, b in sorted(iv):
+            a = max(a, end)
+            if b > a:
+                clean_hold_hours += (b - a) / 3600
+            end = max(end, b)
+    # secondary (added after the development run): the hold-capable detectors on their own
+    hold_first: dict[str, float] = {}
+    for a in eng.alerts:
+        if a["detector"] != "D4" and a["t"] < t1:
+            hold_first[a["merchant"]] = min(hold_first.get(a["merchant"], math.inf), a["t"])
+    hold_counted = {m for m in hold_first if any(t0 <= a["t"] < t1 and a["detector"] != "D4" for a in eng.alerts if a["merchant"] == m)}
+    to_hold_alert = [hold_first[m] - first_fraud[m] for m in active if m in hold_first]
     fp = len(counted - fraud_m)
     prevalence = float(fr["amount_inr"].count()) / float(in_test.sum())
     factor = prevalence / REPORTED_UPI_RATE
@@ -309,6 +327,14 @@ def evaluate(data: Data, params: dict[str, Any], label: str) -> dict[str, Any]:
         "fraudHeldShare": float(held_fraud / fr["amount_inr"].sum()) if len(fr) else None,
         "medianSecondsToAlert": statistics.median(to_alert) if to_alert else None,
         "flaggedBeforeFirstBatch": before_batch, "genuineHeld": float(held_genuine),
+        "secondary": {
+            "note": "added after the development run: D4 fires at onboarding, so it dominates timing and its reviews on family businesses dominate precision",
+            "holdDetectorsRecall": sum(1 for m in active if m in hold_first) / len(active) if active else None,
+            "holdDetectorsPrecision": len(hold_counted & fraud_m) / len(hold_counted) if hold_counted else None,
+            "holdDetectorsCounted": len(hold_counted),
+            "medianSecondsToHoldAlert": statistics.median(to_hold_alert) if to_hold_alert else None,
+            "d4Only": {"fraudMerchantsCounted": sum(1 for m in counted & fraud_m if dets[m] == {"D4"}), "cleanMerchantsCounted": sum(1 for m in counted - fraud_m if dets[m] == {"D4"})},
+        },
         "byMerchant": [{"merchant": m, "scenario": data.m[m]["scenario"], "category": data.m[m]["category"], "detectors": sorted(dets[m]),
                         "secondsToAlert": (first_alert[m] - first_fraud[m]) if m in first_alert else None} for m in sorted(active)],
         "cleanCost": {

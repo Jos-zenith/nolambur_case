@@ -1,0 +1,75 @@
+{
+  "label": "fresh s5",
+  "rules": "p1.0",
+  "folder": "data\\p2m\\s5\\nolambur_p2m",
+  "recall": 1.0,
+  "activeFraudMerchants": 3,
+  "activeFlagged": 3,
+  "precision": 0.3333333333333333,
+  "merchantsCounted": 12,
+  "fraudCounted": 4,
+  "frontsFlagged": 2,
+  "falseMerchants": 8,
+  "fraudInflow": 280193.0,
+  "fraudHeldBeforeSettlement": 175408.0,
+  "fraudHeldShare": 0.6260256323319997,
+  "medianSecondsToAlert": -99330.0,
+  "flaggedBeforeFirstBatch": 3,
+  "genuineHeld": 6406.0,
+  "secondary": {
+    "note": "added after the development run: D4 fires at onboarding, so it dominates timing and its reviews on family businesses dominate precision",
+    "holdDetectorsRecall": 1.0,
+    "holdDetectorsPrecision": 1.0,
+    "holdDetectorsCounted": 2,
+    "medianSecondsToHoldAlert": 6153.0,
+    "d4Only": {
+      "fraudMerchantsCounted": 2,
+      "cleanMerchantsCounted": 8
+    }
+  },
+  "byMerchant": [
+    {
+      "merchant": "071280a45ec9",
+      "scenario": "S2",
+      "category": "subscription",
+      "detectors": [
+        "D1",
+        "D3"
+      ],
+      "secondsToAlert": -99330.0
+    },
+    {
+      "merchant": "48d7bc0d2124",
+      "scenario": "S2",
+      "category": "subscription",
+      "detectors": [
+        "D1",
+        "D3"
+      ],
+      "secondsToAlert": 6153.0
+    },
+    {
+      "merchant": "7651e392ed5e",
+      "scenario": "S2+S3",
+      "category": "subscription",
+      "detectors": [
+        "D1",
+        "D3",
+        "D4"
+      ],
+      "secondsToAlert": -708609.0
+    }
+  ],
+  "cleanCost": {
+    "window": "days 1-9",
+    "falseMerchantsPerDay": 0.2222222222222222,
+    "byFirstDetector": {
+      "D4": 8,
+      "D2": 3
+    },
+    "d4ReviewsOnCleanMerchants": 8,
+    "cleanHoldMerchantHours": 66.05166666666666,
+    "falsePerRealAtReportedRate": 838.801857036228,
+    "reportedFactor": 419.400928518114
+  }
+}

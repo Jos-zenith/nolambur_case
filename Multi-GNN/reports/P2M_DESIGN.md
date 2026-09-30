@@ -85,6 +85,8 @@ Every parameter comes from the train days' clean traffic.
 
 Everything is reported on the development draw and the fresh draw. The detectors are not retuned after the fresh draw is seen.
 
+**Added after the stream-2 run, before running the draws it names.** The judging draw (stream 2) happened to contain no settlement ring, so S3 was not tested on fresh data. Two more fresh draws, streams 4 and 5 (P2M's stream 3 stays reserved), are run with the same committed parameters. Every draw is reported, whether or not it contains a ring.
+
 ## Stated limits in advance
 
 - **The data is synthetic, and the scenarios and detectors come from the same person.** This is the same caveat as in 3.2–3.4.
