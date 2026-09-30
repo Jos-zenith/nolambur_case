@@ -371,12 +371,17 @@ def verify(name: str, sample: int) -> dict[str, Any]:
             "fullGraphEdges": int(scorer.n), "subgraphMsPer50": round(statistics.median(times), 2)}
 
 
-def precompute(name: str, bucket_seconds: float = 5.0) -> dict[str, Any]:
-    """Score every edge in time order using only edges up to its own 5-second bucket."""
+def precompute(name: str, bucket_seconds: float = 5.0, checkpoint: Path | None = None, target: Path | None = None,
+               transform: Any = None) -> dict[str, Any]:
+    """Score every edge in time order using only edges up to its own 5-second bucket.
+    checkpoint/target default to the dataset's own; infra/ablation.py passes others, and a
+    transform(feats, raw, epoch) that rewrites raw feature rows (e.g. permuted amounts)."""
     raw, formatted, epoch = load_dataset(name)
-    ckpt = DATASETS[name]["checkpoint"]
+    ckpt = checkpoint or DATASETS[name]["checkpoint"]
     model, norm = load_gin(ckpt)
     feats = raw_features_for(norm["edge_features"], formatted)
+    if transform is not None:
+        feats = transform(feats, norm["edge_features"], raw, epoch)
     src, dst = raw["sender_id"].astype(str).tolist(), raw["recv_id"].astype(str).tolist()
     scorer = OnlineScorer(model, norm)
     out = np.zeros(len(raw))
@@ -393,7 +398,7 @@ def precompute(name: str, bucket_seconds: float = 5.0) -> dict[str, Any]:
     # stored in the raw CSV's row order, which the engine uses
     order = np.argsort(np.argsort(pd_order(name)))
     scores_raw_order = out[order]
-    target = DATASETS[name]["dir"] / "online_scores.npy"
+    target = target or DATASETS[name]["dir"] / "online_scores.npy"
     np.save(target, scores_raw_order)
     meta = {"dataset": name, "checkpoint": ckpt.name, "checkpointSha": checkpoint_sha(ckpt), "bucketSeconds": bucket_seconds, "windowHours": WINDOW_SECONDS / 3600,
             "edges": int(len(raw)), "batches": int(len(starts)), "wallSeconds": round(wall, 1), "p50Ms": round(float(np.percentile(latencies, 50)), 2),

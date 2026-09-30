@@ -1,0 +1,1192 @@
+{
+  "createdAt": "2026-09-30T23:55:44",
+  "dataset": "nolambur_v2 (synthetic, seed 7)",
+  "protocol": "fit on days 0-5, threshold = max F1 on days 6-7, report days 8-9; GNN scores online and time-respecting",
+  "arms": {
+    "amount_only": {
+      "edge": {
+        "rocAuc": 0.9901161886494122,
+        "averagePrecision": 0.4900154321206277,
+        "threshold": 0.99,
+        "tp": 23,
+        "fp": 17,
+        "fn": 34,
+        "precision": 0.575,
+        "recall": 0.40350877192982454,
+        "f1": 0.4742268041237113,
+        "precisionCi": [
+          0.4219,
+          0.7149
+        ],
+        "recallCi": [
+          0.2862,
+          0.533
+        ],
+        "recallByLayer": {
+          "L0\u2192L1": {
+            "fraud": 14,
+            "caught": 10
+          },
+          "L1\u2192L2": {
+            "fraud": 32,
+            "caught": 11
+          },
+          "L2\u2192L2": {
+            "fraud": 11,
+            "caught": 2
+          }
+        },
+        "precisionAtK": [
+          {
+            "k": 25,
+            "precision": 0.72
+          },
+          {
+            "k": 50,
+            "precision": 0.52
+          },
+          {
+            "k": 100,
+            "precision": 0.34
+          },
+          {
+            "k": 200,
+            "precision": 0.205
+          }
+        ]
+      },
+      "accounts": {
+        "mulesActive": 26,
+        "rulesOnly": {
+          "tp": 15,
+          "fp": 7,
+          "fn": 11,
+          "precision": 0.6818181818181818,
+          "recall": 0.5769230769230769,
+          "f1": 0.6249999999999999,
+          "precisionCi": [
+            0.4732,
+            0.8364
+          ],
+          "recallCi": [
+            0.3895,
+            0.7446
+          ]
+        },
+        "rulesPlusModel": {
+          "tp": 19,
+          "fp": 18,
+          "fn": 7,
+          "precision": 0.5135135135135135,
+          "recall": 0.7307692307692307,
+          "f1": 0.6031746031746031,
+          "precisionCi": [
+            0.3589,
+            0.6655
+          ],
+          "recallCi": [
+            0.5392,
+            0.863
+          ]
+        },
+        "modelOnlyAccounts": 20,
+        "modelOnlyMules": 9,
+        "leadSecondsMedian": 11366.0,
+        "alertsPerDay": 18.5
+      },
+      "policy": {
+        "fraudTotal": 1658542.0,
+        "fraudStopped": 276261.0,
+        "genuineBlocked": 6640.0,
+        "restrictedAccounts": 4,
+        "innocentRestricted": 0
+      },
+      "validation": {
+        "tp": 30,
+        "fp": 20,
+        "fn": 42,
+        "precision": 0.6,
+        "recall": 0.4166666666666667,
+        "f1": 0.49180327868852464,
+        "edges": 16398
+      },
+      "seconds": 10.3
+    },
+    "tabular": {
+      "edge": {
+        "rocAuc": 0.9548810464970602,
+        "averagePrecision": 0.37726061079033196,
+        "threshold": 0.94,
+        "tp": 28,
+        "fp": 38,
+        "fn": 29,
+        "precision": 0.42424242424242425,
+        "recall": 0.49122807017543857,
+        "f1": 0.4552845528455284,
+        "precisionCi": [
+          0.3124,
+          0.5444
+        ],
+        "recallCi": [
+          0.3662,
+          0.6174
+        ],
+        "recallByLayer": {
+          "L0\u2192L1": {
+            "fraud": 14,
+            "caught": 10
+          },
+          "L1\u2192L2": {
+            "fraud": 32,
+            "caught": 13
+          },
+          "L2\u2192L2": {
+            "fraud": 11,
+            "caught": 5
+          }
+        },
+        "precisionAtK": [
+          {
+            "k": 25,
+            "precision": 0.72
+          },
+          {
+            "k": 50,
+            "precision": 0.44
+          },
+          {
+            "k": 100,
+            "precision": 0.32
+          },
+          {
+            "k": 200,
+            "precision": 0.18
+          }
+        ]
+      },
+      "accounts": {
+        "mulesActive": 26,
+        "rulesOnly": {
+          "tp": 15,
+          "fp": 7,
+          "fn": 11,
+          "precision": 0.6818181818181818,
+          "recall": 0.5769230769230769,
+          "f1": 0.6249999999999999,
+          "precisionCi": [
+            0.4732,
+            0.8364
+          ],
+          "recallCi": [
+            0.3895,
+            0.7446
+          ]
+        },
+        "rulesPlusModel": {
+          "tp": 20,
+          "fp": 41,
+          "fn": 6,
+          "precision": 0.32786885245901637,
+          "recall": 0.7692307692307693,
+          "f1": 0.45977011494252873,
+          "precisionCi": [
+            0.2233,
+            0.4528
+          ],
+          "recallCi": [
+            0.5795,
+            0.8897
+          ]
+        },
+        "modelOnlyAccounts": 45,
+        "modelOnlyMules": 11,
+        "leadSecondsMedian": 11366.0,
+        "alertsPerDay": 30.5
+      },
+      "policy": {
+        "fraudTotal": 1658542.0,
+        "fraudStopped": 276261.0,
+        "genuineBlocked": 6640.0,
+        "restrictedAccounts": 4,
+        "innocentRestricted": 0
+      },
+      "validation": {
+        "tp": 26,
+        "fp": 47,
+        "fn": 46,
+        "precision": 0.3561643835616438,
+        "recall": 0.3611111111111111,
+        "f1": 0.3586206896551724,
+        "edges": 16398
+      },
+      "seconds": 10.4
+    },
+    "gnn_full_s42": {
+      "edge": {
+        "rocAuc": 0.9994178687299387,
+        "averagePrecision": 0.9269624721214742,
+        "threshold": 0.86,
+        "tp": 45,
+        "fp": 2,
+        "fn": 12,
+        "precision": 0.9574468085106383,
+        "recall": 0.7894736842105263,
+        "f1": 0.8653846153846154,
+        "precisionCi": [
+          0.8575,
+          0.9883
+        ],
+        "recallCi": [
+          0.6671,
+          0.8753
+        ],
+        "recallByLayer": {
+          "L0\u2192L1": {
+            "fraud": 14,
+            "caught": 10
+          },
+          "L1\u2192L2": {
+            "fraud": 32,
+            "caught": 29
+          },
+          "L2\u2192L2": {
+            "fraud": 11,
+            "caught": 6
+          }
+        },
+        "precisionAtK": [
+          {
+            "k": 25,
+            "precision": 1.0
+          },
+          {
+            "k": 50,
+            "precision": 0.94
+          },
+          {
+            "k": 100,
+            "precision": 0.55
+          },
+          {
+            "k": 200,
+            "precision": 0.28
+          }
+        ]
+      },
+      "accounts": {
+        "mulesActive": 26,
+        "rulesOnly": {
+          "tp": 15,
+          "fp": 7,
+          "fn": 11,
+          "precision": 0.6818181818181818,
+          "recall": 0.5769230769230769,
+          "f1": 0.6249999999999999,
+          "precisionCi": [
+            0.4732,
+            0.8364
+          ],
+          "recallCi": [
+            0.3895,
+            0.7446
+          ]
+        },
+        "rulesPlusModel": {
+          "tp": 20,
+          "fp": 9,
+          "fn": 6,
+          "precision": 0.6896551724137931,
+          "recall": 0.7692307692307693,
+          "f1": 0.7272727272727274,
+          "precisionCi": [
+            0.5077,
+            0.8272
+          ],
+          "recallCi": [
+            0.5795,
+            0.8897
+          ]
+        },
+        "modelOnlyAccounts": 14,
+        "modelOnlyMules": 12,
+        "leadSecondsMedian": 11366.0,
+        "alertsPerDay": 14.5
+      },
+      "policy": {
+        "fraudTotal": 1658542.0,
+        "fraudStopped": 276261.0,
+        "genuineBlocked": 6640.0,
+        "restrictedAccounts": 4,
+        "innocentRestricted": 0
+      },
+      "validation": {
+        "tp": 57,
+        "fp": 5,
+        "fn": 15,
+        "precision": 0.9193548387096774,
+        "recall": 0.7916666666666666,
+        "f1": 0.8507462686567164,
+        "edges": 16398
+      },
+      "seconds": 10.2
+    },
+    "gnn_full_s1": {
+      "edge": {
+        "rocAuc": 0.9995917520963206,
+        "averagePrecision": 0.9371878200229707,
+        "threshold": 0.95,
+        "tp": 45,
+        "fp": 3,
+        "fn": 12,
+        "precision": 0.9375,
+        "recall": 0.7894736842105263,
+        "f1": 0.8571428571428572,
+        "precisionCi": [
+          0.8316,
+          0.9785
+        ],
+        "recallCi": [
+          0.6671,
+          0.8753
+        ],
+        "recallByLayer": {
+          "L0\u2192L1": {
+            "fraud": 14,
+            "caught": 10
+          },
+          "L1\u2192L2": {
+            "fraud": 32,
+            "caught": 30
+          },
+          "L2\u2192L2": {
+            "fraud": 11,
+            "caught": 5
+          }
+        },
+        "precisionAtK": [
+          {
+            "k": 25,
+            "precision": 1.0
+          },
+          {
+            "k": 50,
+            "precision": 0.94
+          },
+          {
+            "k": 100,
+            "precision": 0.55
+          },
+          {
+            "k": 200,
+            "precision": 0.28
+          }
+        ]
+      },
+      "accounts": {
+        "mulesActive": 26,
+        "rulesOnly": {
+          "tp": 15,
+          "fp": 7,
+          "fn": 11,
+          "precision": 0.6818181818181818,
+          "recall": 0.5769230769230769,
+          "f1": 0.6249999999999999,
+          "precisionCi": [
+            0.4732,
+            0.8364
+          ],
+          "recallCi": [
+            0.3895,
+            0.7446
+          ]
+        },
+        "rulesPlusModel": {
+          "tp": 21,
+          "fp": 10,
+          "fn": 5,
+          "precision": 0.6774193548387096,
+          "recall": 0.8076923076923077,
+          "f1": 0.7368421052631579,
+          "precisionCi": [
+            0.5014,
+            0.8143
+          ],
+          "recallCi": [
+            0.6212,
+            0.9149
+          ]
+        },
+        "modelOnlyAccounts": 16,
+        "modelOnlyMules": 13,
+        "leadSecondsMedian": 11366.0,
+        "alertsPerDay": 15.5
+      },
+      "policy": {
+        "fraudTotal": 1658542.0,
+        "fraudStopped": 276261.0,
+        "genuineBlocked": 6640.0,
+        "restrictedAccounts": 4,
+        "innocentRestricted": 0
+      },
+      "validation": {
+        "tp": 57,
+        "fp": 3,
+        "fn": 15,
+        "precision": 0.95,
+        "recall": 0.7916666666666666,
+        "f1": 0.8636363636363635,
+        "edges": 16398
+      },
+      "seconds": 10.1
+    },
+    "gnn_full_s2": {
+      "edge": {
+        "rocAuc": 0.9993498274126588,
+        "averagePrecision": 0.9309589263127549,
+        "threshold": 0.2,
+        "tp": 50,
+        "fp": 6,
+        "fn": 7,
+        "precision": 0.8928571428571429,
+        "recall": 0.8771929824561403,
+        "f1": 0.8849557522123894,
+        "precisionCi": [
+          0.7853,
+          0.95
+        ],
+        "recallCi": [
+          0.7675,
+          0.9392
+        ],
+        "recallByLayer": {
+          "L0\u2192L1": {
+            "fraud": 14,
+            "caught": 12
+          },
+          "L1\u2192L2": {
+            "fraud": 32,
+            "caught": 31
+          },
+          "L2\u2192L2": {
+            "fraud": 11,
+            "caught": 7
+          }
+        },
+        "precisionAtK": [
+          {
+            "k": 25,
+            "precision": 1.0
+          },
+          {
+            "k": 50,
+            "precision": 0.96
+          },
+          {
+            "k": 100,
+            "precision": 0.54
+          },
+          {
+            "k": 200,
+            "precision": 0.28
+          }
+        ]
+      },
+      "accounts": {
+        "mulesActive": 26,
+        "rulesOnly": {
+          "tp": 15,
+          "fp": 7,
+          "fn": 11,
+          "precision": 0.6818181818181818,
+          "recall": 0.5769230769230769,
+          "f1": 0.6249999999999999,
+          "precisionCi": [
+            0.4732,
+            0.8364
+          ],
+          "recallCi": [
+            0.3895,
+            0.7446
+          ]
+        },
+        "rulesPlusModel": {
+          "tp": 21,
+          "fp": 12,
+          "fn": 5,
+          "precision": 0.6363636363636364,
+          "recall": 0.8076923076923077,
+          "f1": 0.7118644067796609,
+          "precisionCi": [
+            0.4662,
+            0.7781
+          ],
+          "recallCi": [
+            0.6212,
+            0.9149
+          ]
+        },
+        "modelOnlyAccounts": 18,
+        "modelOnlyMules": 13,
+        "leadSecondsMedian": 11366.0,
+        "alertsPerDay": 16.5
+      },
+      "policy": {
+        "fraudTotal": 1658542.0,
+        "fraudStopped": 276261.0,
+        "genuineBlocked": 6640.0,
+        "restrictedAccounts": 4,
+        "innocentRestricted": 0
+      },
+      "validation": {
+        "tp": 62,
+        "fp": 8,
+        "fn": 10,
+        "precision": 0.8857142857142857,
+        "recall": 0.8611111111111112,
+        "f1": 0.8732394366197184,
+        "edges": 16398
+      },
+      "seconds": 10.4
+    },
+    "gnn_noamt_s1": {
+      "edge": {
+        "rocAuc": 0.8731979851129917,
+        "averagePrecision": 0.053190467595826324,
+        "threshold": 0.96,
+        "tp": 7,
+        "fp": 38,
+        "fn": 50,
+        "precision": 0.15555555555555556,
+        "recall": 0.12280701754385964,
+        "f1": 0.13725490196078433,
+        "precisionCi": [
+          0.0775,
+          0.2878
+        ],
+        "recallCi": [
+          0.0608,
+          0.2325
+        ],
+        "recallByLayer": {
+          "L0\u2192L1": {
+            "fraud": 14,
+            "caught": 0
+          },
+          "L1\u2192L2": {
+            "fraud": 32,
+            "caught": 5
+          },
+          "L2\u2192L2": {
+            "fraud": 11,
+            "caught": 2
+          }
+        },
+        "precisionAtK": [
+          {
+            "k": 25,
+            "precision": 0.16
+          },
+          {
+            "k": 50,
+            "precision": 0.14
+          },
+          {
+            "k": 100,
+            "precision": 0.11
+          },
+          {
+            "k": 200,
+            "precision": 0.075
+          }
+        ]
+      },
+      "accounts": {
+        "mulesActive": 26,
+        "rulesOnly": {
+          "tp": 15,
+          "fp": 7,
+          "fn": 11,
+          "precision": 0.6818181818181818,
+          "recall": 0.5769230769230769,
+          "f1": 0.6249999999999999,
+          "precisionCi": [
+            0.4732,
+            0.8364
+          ],
+          "recallCi": [
+            0.3895,
+            0.7446
+          ]
+        },
+        "rulesPlusModel": {
+          "tp": 16,
+          "fp": 30,
+          "fn": 10,
+          "precision": 0.34782608695652173,
+          "recall": 0.6153846153846154,
+          "f1": 0.4444444444444444,
+          "precisionCi": [
+            0.2268,
+            0.4923
+          ],
+          "recallCi": [
+            0.4253,
+            0.7757
+          ]
+        },
+        "modelOnlyAccounts": 25,
+        "modelOnlyMules": 2,
+        "leadSecondsMedian": 29116.0,
+        "alertsPerDay": 23.0
+      },
+      "policy": {
+        "fraudTotal": 1658542.0,
+        "fraudStopped": 261245.0,
+        "genuineBlocked": 2822.0,
+        "restrictedAccounts": 4,
+        "innocentRestricted": 0
+      },
+      "validation": {
+        "tp": 11,
+        "fp": 33,
+        "fn": 61,
+        "precision": 0.25,
+        "recall": 0.1527777777777778,
+        "f1": 0.18965517241379312,
+        "edges": 16398
+      },
+      "seconds": 3.4
+    },
+    "gnn_noamt_s2": {
+      "edge": {
+        "rocAuc": 0.8918629064658692,
+        "averagePrecision": 0.028240880806688726,
+        "threshold": 0.95,
+        "tp": 0,
+        "fp": 11,
+        "fn": 57,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "precisionCi": [
+          0.0,
+          0.2588
+        ],
+        "recallCi": [
+          0.0,
+          0.0631
+        ],
+        "recallByLayer": {
+          "L0\u2192L1": {
+            "fraud": 14,
+            "caught": 0
+          },
+          "L1\u2192L2": {
+            "fraud": 32,
+            "caught": 0
+          },
+          "L2\u2192L2": {
+            "fraud": 11,
+            "caught": 0
+          }
+        },
+        "precisionAtK": [
+          {
+            "k": 25,
+            "precision": 0.04
+          },
+          {
+            "k": 50,
+            "precision": 0.06
+          },
+          {
+            "k": 100,
+            "precision": 0.05
+          },
+          {
+            "k": 200,
+            "precision": 0.04
+          }
+        ]
+      },
+      "accounts": {
+        "mulesActive": 26,
+        "rulesOnly": {
+          "tp": 15,
+          "fp": 7,
+          "fn": 11,
+          "precision": 0.6818181818181818,
+          "recall": 0.5769230769230769,
+          "f1": 0.6249999999999999,
+          "precisionCi": [
+            0.4732,
+            0.8364
+          ],
+          "recallCi": [
+            0.3895,
+            0.7446
+          ]
+        },
+        "rulesPlusModel": {
+          "tp": 15,
+          "fp": 16,
+          "fn": 11,
+          "precision": 0.4838709677419355,
+          "recall": 0.5769230769230769,
+          "f1": 0.5263157894736842,
+          "precisionCi": [
+            0.3197,
+            0.6516
+          ],
+          "recallCi": [
+            0.3895,
+            0.7446
+          ]
+        },
+        "modelOnlyAccounts": 9,
+        "modelOnlyMules": 0,
+        "leadSecondsMedian": 21684.0,
+        "alertsPerDay": 15.5
+      },
+      "policy": {
+        "fraudTotal": 1658542.0,
+        "fraudStopped": 244666.0,
+        "genuineBlocked": 3067.0,
+        "restrictedAccounts": 4,
+        "innocentRestricted": 0
+      },
+      "validation": {
+        "tp": 5,
+        "fp": 10,
+        "fn": 67,
+        "precision": 0.3333333333333333,
+        "recall": 0.06944444444444445,
+        "f1": 0.11494252873563217,
+        "edges": 16398
+      },
+      "seconds": 3.5
+    },
+    "gnn_noamt_s42": {
+      "edge": {
+        "rocAuc": 0.8755815912596068,
+        "averagePrecision": 0.01731868001324746,
+        "threshold": 0.83,
+        "tp": 0,
+        "fp": 10,
+        "fn": 57,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "precisionCi": [
+          0.0,
+          0.2775
+        ],
+        "recallCi": [
+          0.0,
+          0.0631
+        ],
+        "recallByLayer": {
+          "L0\u2192L1": {
+            "fraud": 14,
+            "caught": 0
+          },
+          "L1\u2192L2": {
+            "fraud": 32,
+            "caught": 0
+          },
+          "L2\u2192L2": {
+            "fraud": 11,
+            "caught": 0
+          }
+        },
+        "precisionAtK": [
+          {
+            "k": 25,
+            "precision": 0.0
+          },
+          {
+            "k": 50,
+            "precision": 0.02
+          },
+          {
+            "k": 100,
+            "precision": 0.02
+          },
+          {
+            "k": 200,
+            "precision": 0.025
+          }
+        ]
+      },
+      "accounts": {
+        "mulesActive": 26,
+        "rulesOnly": {
+          "tp": 15,
+          "fp": 7,
+          "fn": 11,
+          "precision": 0.6818181818181818,
+          "recall": 0.5769230769230769,
+          "f1": 0.6249999999999999,
+          "precisionCi": [
+            0.4732,
+            0.8364
+          ],
+          "recallCi": [
+            0.3895,
+            0.7446
+          ]
+        },
+        "rulesPlusModel": {
+          "tp": 15,
+          "fp": 15,
+          "fn": 11,
+          "precision": 0.5,
+          "recall": 0.5769230769230769,
+          "f1": 0.5357142857142857,
+          "precisionCi": [
+            0.3315,
+            0.6685
+          ],
+          "recallCi": [
+            0.3895,
+            0.7446
+          ]
+        },
+        "modelOnlyAccounts": 8,
+        "modelOnlyMules": 0,
+        "leadSecondsMedian": 21684.0,
+        "alertsPerDay": 15.0
+      },
+      "policy": {
+        "fraudTotal": 1658542.0,
+        "fraudStopped": 244666.0,
+        "genuineBlocked": 3067.0,
+        "restrictedAccounts": 4,
+        "innocentRestricted": 0
+      },
+      "validation": {
+        "tp": 5,
+        "fp": 17,
+        "fn": 67,
+        "precision": 0.22727272727272727,
+        "recall": 0.06944444444444445,
+        "f1": 0.10638297872340427,
+        "edges": 16398
+      },
+      "seconds": 3.5
+    },
+    "gnn_full_permuted": {
+      "edge": {
+        "rocAuc": 0.6473278122664454,
+        "averagePrecision": 0.005328411031134836,
+        "threshold": 0.86,
+        "tp": 0,
+        "fp": 9,
+        "fn": 57,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "precisionCi": [
+          0.0,
+          0.2992
+        ],
+        "recallCi": [
+          0.0,
+          0.0631
+        ],
+        "recallByLayer": {
+          "L0\u2192L1": {
+            "fraud": 14,
+            "caught": 0
+          },
+          "L1\u2192L2": {
+            "fraud": 32,
+            "caught": 0
+          },
+          "L2\u2192L2": {
+            "fraud": 11,
+            "caught": 0
+          }
+        },
+        "precisionAtK": [
+          {
+            "k": 25,
+            "precision": 0.0
+          },
+          {
+            "k": 50,
+            "precision": 0.0
+          },
+          {
+            "k": 100,
+            "precision": 0.01
+          },
+          {
+            "k": 200,
+            "precision": 0.005
+          }
+        ]
+      },
+      "accounts": {
+        "mulesActive": 26,
+        "rulesOnly": {
+          "tp": 15,
+          "fp": 7,
+          "fn": 11,
+          "precision": 0.6818181818181818,
+          "recall": 0.5769230769230769,
+          "f1": 0.6249999999999999,
+          "precisionCi": [
+            0.4732,
+            0.8364
+          ],
+          "recallCi": [
+            0.3895,
+            0.7446
+          ]
+        },
+        "rulesPlusModel": {
+          "tp": 15,
+          "fp": 14,
+          "fn": 11,
+          "precision": 0.5172413793103449,
+          "recall": 0.5769230769230769,
+          "f1": 0.5454545454545454,
+          "precisionCi": [
+            0.3443,
+            0.6861
+          ],
+          "recallCi": [
+            0.3895,
+            0.7446
+          ]
+        },
+        "modelOnlyAccounts": 8,
+        "modelOnlyMules": 0,
+        "leadSecondsMedian": 21684.0,
+        "alertsPerDay": 14.5
+      },
+      "policy": {
+        "fraudTotal": 1658542.0,
+        "fraudStopped": 244666.0,
+        "genuineBlocked": 3067.0,
+        "restrictedAccounts": 4,
+        "innocentRestricted": 0
+      },
+      "validation": {
+        "tp": 57,
+        "fp": 5,
+        "fn": 15,
+        "precision": 0.9193548387096774,
+        "recall": 0.7916666666666666,
+        "f1": 0.8507462686567164,
+        "edges": 16398
+      },
+      "seconds": 3.5
+    }
+  },
+  "seeds": {
+    "gnn_full": {
+      "n": 3,
+      "edgeRecall": [
+        0.7894736842105263,
+        0.7894736842105263,
+        0.8771929824561403
+      ],
+      "edgePrecision": [
+        0.9574468085106383,
+        0.9375,
+        0.8928571428571429
+      ],
+      "averagePrecision": [
+        0.9269624721214742,
+        0.9371878200229707,
+        0.9309589263127549
+      ],
+      "rulesPlusModelRecall": [
+        0.7692307692307693,
+        0.8076923076923077,
+        0.8076923076923077
+      ],
+      "rulesPlusModelPrecision": [
+        0.6896551724137931,
+        0.6774193548387096,
+        0.6363636363636364
+      ]
+    },
+    "gnn_noamt": {
+      "n": 3,
+      "edgeRecall": [
+        0.12280701754385964,
+        0.0,
+        0.0
+      ],
+      "edgePrecision": [
+        0.15555555555555556,
+        0.0,
+        0.0
+      ],
+      "averagePrecision": [
+        0.053190467595826324,
+        0.028240880806688726,
+        0.01731868001324746
+      ],
+      "rulesPlusModelRecall": [
+        0.6153846153846154,
+        0.5769230769230769,
+        0.5769230769230769
+      ],
+      "rulesPlusModelPrecision": [
+        0.34782608695652173,
+        0.4838709677419355,
+        0.5
+      ]
+    }
+  },
+  "baseRates": {
+    "note": "Projection, not measurement: holds the production arm's recall and false-positive rate fixed as fraud gets rarer. Range: recall at its 95% lower bound with FPR at its upper (pessimistic), and the reverse (optimistic).",
+    "caveats": [
+      "The reported rate counts incidents per transaction, includes fraud that is not mule-based and probably undercounts; the anchor row is an order of magnitude, not an estimate.",
+      "The false-positive rate is held constant as clean traffic scales. Real clean traffic is messier than the synthetic set, so the real rate is more likely higher than lower.",
+      "The account anchor reuses the payment factor: the share of mule accounts is not the share of fraud payments."
+    ],
+    "reportedUpi": {
+      "incidents": 1264000,
+      "transactions": 185800000000.0,
+      "period": "FY 2024-25",
+      "source": "https://www.moneylife.in/article/upi-frauds-27-lakh-cases-worth-rs2145-crore-registered-in-30-months-govt/75709.html",
+      "rate": 6.803013993541442e-06,
+      "factor": 513.995413809357
+    },
+    "edge": {
+      "unit": "payment (model alone)",
+      "tp": 45,
+      "fn": 12,
+      "fp": 2,
+      "negatives": 16244,
+      "measuredPrevalence": 0.0034967179927611804,
+      "recall": 0.7894736842105263,
+      "recallCi": [
+        0.6611299420734731,
+        0.8862097756836405
+      ],
+      "falsePositiveRate": 0.00012312238364934746,
+      "falsePositiveRateCi": [
+        1.4911039669246608e-05,
+        0.00044468886321352144
+      ],
+      "rows": [
+        {
+          "rarer": 1,
+          "prevalence": 0.0034967179927611804,
+          "anchor": false,
+          "precision": 0.9574468085106383,
+          "precisionLow": 0.8391481086508419,
+          "precisionHigh": 0.9952278724308069,
+          "falsePerTrue": 0.04444444444444439
+        },
+        {
+          "rarer": 10,
+          "prevalence": 0.000349671799276118,
+          "anchor": false,
+          "precision": 0.6916356163294811,
+          "precisionLow": 0.342125850617293,
+          "precisionHigh": 0.9541060393676399,
+          "falsePerTrue": 0.44584803961804703
+        },
+        {
+          "rarer": 100,
+          "prevalence": 3.4967179927611804e-05,
+          "anchor": false,
+          "precision": 0.18315407462567643,
+          "precisionLow": 0.04941916703823845,
+          "precisionHigh": 0.6751434371009923,
+          "falsePerTrue": 4.459883991354073
+        },
+        {
+          "rarer": 1000,
+          "prevalence": 3.4967179927611806e-06,
+          "anchor": false,
+          "precision": 0.02192970745449851,
+          "precisionLow": 0.005171788934329632,
+          "precisionHigh": 0.1720631765584973,
+          "falsePerTrue": 44.60024350871433
+        },
+        {
+          "rarer": 514.0,
+          "prevalence": 6.803013993541442e-06,
+          "anchor": true,
+          "precision": 0.04179860252147644,
+          "precisionLow": 0.010013003827891229,
+          "precisionHigh": 0.2879152244388338,
+          "falsePerTrue": 22.924244823405097
+        }
+      ]
+    },
+    "account": {
+      "unit": "account (rules + model queue)",
+      "tp": 20,
+      "fn": 6,
+      "fp": 9,
+      "negatives": 5245,
+      "measuredPrevalence": 0.0049326503509770445,
+      "recall": 0.7692307692307693,
+      "recallCi": [
+        0.5635249030586134,
+        0.9102598891154249
+      ],
+      "falsePositiveRate": 0.0017159199237368923,
+      "falsePositiveRateCi": [
+        0.0007849186174753864,
+        0.0032548403265758264
+      ],
+      "rows": [
+        {
+          "rarer": 1,
+          "prevalence": 0.0049326503509770445,
+          "anchor": false,
+          "precision": 0.689655172413793,
+          "precisionLow": 0.461857827240386,
+          "precisionHigh": 0.8518230193509894,
+          "falsePerTrue": 0.4500000000000001
+        },
+        {
+          "rarer": 10,
+          "prevalence": 0.0004932650350977045,
+          "anchor": false,
+          "precision": 0.18115691746566828,
+          "precisionLow": 0.07871742662527578,
+          "precisionHigh": 0.3639952635241064,
+          "falsePerTrue": 4.520076263107721
+        },
+        {
+          "rarer": 100,
+          "prevalence": 4.9326503509770446e-05,
+          "anchor": false,
+          "precision": 0.02163526287978755,
+          "precisionLow": 0.008468213921717545,
+          "precisionHigh": 0.05411066353975876,
+          "falsePerTrue": 45.220838894184936
+        },
+        {
+          "rarer": 1000,
+          "prevalence": 4.932650350977045e-06,
+          "anchor": false,
+          "precision": 0.00220639275061372,
+          "precisionLow": 0.000853287066071039,
+          "precisionHigh": 0.0056878221485279785,
+          "falsePerTrue": 452.22846520495705
+        },
+        {
+          "rarer": 514.0,
+          "prevalence": 9.596681640444722e-06,
+          "anchor": true,
+          "precision": 0.004283714287178771,
+          "precisionLow": 0.001658775778295907,
+          "precisionHigh": 0.011006756426202085,
+          "falsePerTrue": 232.4422729809541
+        }
+      ]
+    }
+  }
+}
