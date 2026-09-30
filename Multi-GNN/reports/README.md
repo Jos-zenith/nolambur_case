@@ -10,6 +10,7 @@ Every number here comes from a JSON file in this folder, written by the code tha
 | `loadtest_http.json` | `python -m infra.loadtest http` |
 | `ablation_v2.json` | `python -m infra.ablation report` |
 | `stress_v2.json` | `python -m infra.stress report` |
+| `rules_r21.json` | `python -m infra.stress rules` |
 
 **The data is synthetic.** Nothing here is evidence about real payment traffic. The only such evidence would come from shadow mode on a partner's anonymised flows (see the end of this report).
 
@@ -50,6 +51,8 @@ The first dataset, v1, could not support a temporal test, because all 353 of its
 |---|---|---|
 | Rules only | 15 / 22 = 68% (47–84%) | 15 / 26 = 58% (39–74%) |
 | Rules + model leads | 20 / 29 = 69% (51–83%) | 20 / 26 = 77% (58–89%) |
+
+**Quote recall as a range, roughly 58–77%.** Redrawing the two test campaigns with unchanged behaviour gives 58% on one draw and 67% on another (sections 3.3 and 3.4). Two campaigns are too few to pin a single number.
 
 - **Queue quality.** Precision@5 is 100%, @10 is 100%, @20 is 75%.
 - **Workload.** 14.5 accounts a day, or 7.2 per analyst for a team of two.
@@ -236,6 +239,97 @@ Secondary: rules-only recall and precision, and the model's recall and precision
 2. **The near-cap structuring rule should count many small payments too:** the number of distinct payers per window, not only amounts near ₹1 lakh.
 3. **Below about ₹5,000 a payment, payment data alone is not enough.** The signals that might still work come from outside the payment: many new accounts linked to one device or onboarding, I4C Suspect Registry hits, and victim reports feeding back quickly.
 
+### 3.4 Rules r2.1: patching the evasions, and what the patch costs
+
+**Design and protocol, fixed on 2026-10-01 before any fresh draw was generated.** The stress variants in 3.3 are now a development set, because the design below was written after seeing them. So r2.1 is judged mainly on fresh draws of every variant (a new random stream for the test campaigns) that nobody has looked at.
+
+**The r2.1 design.** Its parameters come only from the base data's train days (`python -m infra.calibrate_r21`), never from the variants.
+
+- **Pass-through floor.** It becomes relative instead of a fixed ₹1 lakh:
+  - For an account with history (active 5 of the last 7 days): 3× its own busiest day in the last 7.
+  - **Cold start.** For a new account, which is what a first-layer mule usually is: its peer group's 95th-percentile busiest day. That is ₹28,000 for individuals and ₹94,000 for suppliers, from the train days.
+  - Either way, at least ₹25,000.
+  - The ratio (60% sent on, to 2+ accounts) and the known-forwarder exception are unchanged.
+- **New detector: many new payers.** 5 or more different person-to-person payers, each paying an individual's account for the first time, within 24 h, and at least ₹5,000 in total.
+  - It counts people, not rupees.
+  - On the train days, 99.9% of individual-days had at most 3 new payers.
+  - Shops and suppliers are exempt, because many new payers is normal for them.
+- **Friction, a separate router option (`RAIL_MODEL_FRICTION=1`).** A model-only alert scoring 0.95 or more gets a one-hour settlement delay (level 1) instead of no action. Rules still decide every hold.
+- **Unchanged:** the rule for large inflows from new payers, the near-cap structuring rule, hop-from-flagged, and the model and its threshold.
+
+**Evaluation.**
+- **Arms:** r2.0, r2.1, and r2.1 with friction, all using the frozen production model's scores.
+- **Data:** the original draws (3.3, the development set) and one fresh draw of each variant (`--stream 2`), plus the base data.
+- **Metrics:** the five from 3.3. Added:
+  - rules-only recall and precision
+  - false accounts a day on the test days, and per analyst a day (2 analysts)
+  - false accounts a day over days 1–9 of the base data, for a steadier cost estimate
+  - false accounts per real mule if mules were ~500× rarer (3.2)
+  - for friction: fraud money delayed, genuine money delayed, and innocent accounts delayed
+- **Honesty rules:**
+  - r2.1 is not retuned after the fresh draws are seen.
+  - If it fails on them, that is reported.
+  - The simulation has no victims or analysts reacting during a delay. So a delay only "stops" money if a rule later escalates the account. Delayed money is reported separately, as money someone could have recalled.
+
+**Seeds and streams.** The generator seed is 7. A shifted campaign c draws from `np.random.default_rng([7, c, stream])`:
+- stream 1: the original draws (3.3, the development set)
+- stream 2: the fresh draws used here
+- **stream 3: reserved** for judging r2.2, not generated and not looked at
+
+The fresh-draw numbers below come from the commit tagged `eval-r21-fresh`.
+
+**Results (run 2026-10-01; `rules_r21.json`).** Frozen model throughout. The r2.0 rows reproduce 3.3 exactly.
+
+**Fresh draws (stream 2), which r2.1 was not designed on.** Rules + model:
+
+| Variant | Recall r2.0 → r2.1 | Precision r2.0 → r2.1 | Money stopped r2.0 → r2.1 → r2.1 + friction |
+|---|---|---|---|
+| redraw (control) | 67% → 78% | 78% → 46% | 18% → 23% → 32% |
+| fast | 62% → 69% | 76% → 44% | 12% → 16% → **33%** |
+| struct | 33% → **94%** | 55% → 43% | 0% → 20% → 20% |
+| low ×0.5 | 37% → 56% | 91% → 50% | 0% → 11% → 20% |
+| low ×0.2 | **0% → 37%** | — → 48% | 0% → 9% → 9% |
+| low ×0.1 | 0% → 0% | — → 0% (8 false) | 0% |
+| low ×0.05 | 0% → 0% | — → 0% (8 false) | 0% |
+
+**The original draws (the development set) show the same pattern.** Struct recall goes 33% → 97%, low ×0.2 0% → 29%, low ×0.5 38% → 54%, the redraw control 58% → 71%, and ×0.1 and below stay at 0%. The fresh draws match the development set, so the gains are not from fitting r2.1 to the variants it was designed on.
+
+**What it costs: a much longer, noisier queue.** False accounts over days 1–9 of the base data, alert-only replay:
+
+| | False accounts a day | Per analyst a day (2 analysts) | Per 100,000 accounts a day | False accounts per real mule at ~500× rarer |
+|---|---|---|---|---|
+| r2.0 | 6.2 | 3.1 | ~110 | ~50–420 across draws |
+| r2.1 | 18.0 | 9.0 | ~320 | ~510–810 across draws |
+
+**r2.1 roughly triples the clean-traffic queue.** Precision falls on every draw, from 55–91% under r2.0 to 39–50% under r2.1.
+
+**Where the false alerts come from.** Not mainly from the new rules:
+- The new-payers rule is 26 for 26 on fresh structuring, and costs 6 false accounts in 9 days of base traffic.
+- The relative pass-through floor is 8 of 9 and 11 of 12 on its own.
+- **Most of the cost is a cascade.** More primary alerts make hop-from-flagged flag everyone the mules pay, which means shops, suppliers and businesses. On the base data its hits went from 10 of 17 to 12 of 30. False accounts by type under r2.1: 53 individuals, 50 merchants, 38 businesses, 21 suppliers.
+
+**Friction** (a model-only lead scoring 0.95+ delays settlement for an hour):
+- **Money stopped rose by 4–22 points,** when a rule later escalated the account and the delayed transfers were cancelled.
+- **Its biggest effect is on fast mules** (r2.1 alone vs r2.1 + friction: 16% → 33% fresh, 27% → 49% original). It is the only mechanism here that holds back a mule's *first* forward, because it acts the moment the model scores the inflow.
+- **The cost was 1 innocent account delayed for about 2 hours per run,** and at most ₹6,000 of genuine money delayed and then released.
+- It never blocks anything by itself.
+
+**Verdict on r2.1:**
+- **Worth shipping:**
+  - the new-payers detector (precise, cheap, independent of amounts)
+  - the relative floor for the primary pass-through rule
+  - friction
+- **Not worth shipping as it stands:** the queue cost, driven by hop-from-flagged.
+- **The next version (r2.2) should be designed now and judged on another fresh stream (3):**
+  - hop-from-flagged only for individuals' accounts
+  - only when the flagged sender's money is a large share of the recipient's inflow
+- **It is not applied here.** Doing so after seeing these draws would be tuning to the test.
+
+**The stated limit, updated.**
+- r2.0's rules find nothing once a ring's payments fall to a median of about ₹12,000; the model still finds about a third of mules there, and nothing at about ₹5,000.
+- r2.1 finds a third of mules at a median of about ₹5,000.
+- **Below a median of about ₹2,500 a payment (largest ₹10,000), neither version detects the ring,** and r2.1 only adds false alerts.
+
 ## 4. Throughput and latency
 
 **Hardware.** 12th Gen Intel Core i7-1255U, a 15 W laptop chip with 10 cores and 12 threads, 15.7 GB RAM, torch on CPU. A laptop, not a server: read these as a floor.
@@ -275,7 +369,7 @@ Payment latency is half a tick of batching (250 ms) plus the batch's processing 
 
 - **Synthetic data.** Clean payments are mostly small (median about ₹600) while scam transfers run ₹10,000 to ₹1 lakh, so amount still carries much of the signal: without it the model collapses (section 3.1). The rules were written by someone who knew how the generator works.
 - **The test set is small.** Two campaigns, 26 mules. The intervals above are wide for that reason.
-- **Small rings evade everything.** A ring paying around ₹5,000 a hop (none above ₹20,000) is invisible to both the rules and the model, even retrained (section 3.3).
+- **Small rings evade everything.** Below a median of about ₹2,500 a payment (largest ₹10,000), neither rules version nor the model, even retrained, detects the ring. At about ₹5,000, r2.1 finds a third of the mules and r2.0 finds none (sections 3.3 and 3.4).
 - **The base rate is high.** Fraud is 0.35% of test-day payments, about 500× the reported UPI rate. Precision would fall steeply (section 3.2).
 - **The graph is incomplete.** A payment aggregator sees only its own merchants' flows, while mule chains cross banks and PSPs. This engine sees one slice of the graph.
 

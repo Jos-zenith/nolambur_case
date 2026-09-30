@@ -55,6 +55,7 @@ _cli = argparse.ArgumentParser(description="Nolambur v2 generator")
 _cli.add_argument("--variant", choices=["base", "redraw", "fast", "struct", "low"], default="base")
 _cli.add_argument("--scale", type=float, default=1.0, help="low: multiply every fraud amount by this")
 _cli.add_argument("--scope", choices=["test", "all"], default="test", help="campaigns the variant applies to: test (days 8-9) or all")
+_cli.add_argument("--stream", type=int, default=1, help="random stream for the variant campaigns: 1 = the original draws, 2+ = fresh ones")
 _cli.add_argument("--out", type=Path, default=Path(__file__).resolve().parent / "nolambur_v2")
 ARGS = _cli.parse_args()
 VARIANT, SCALE = ARGS.variant, (ARGS.scale if ARGS.variant == "low" else 1.0)
@@ -317,7 +318,7 @@ for c, start in enumerate(CAMPAIGN_STARTS, 1):
         campaign_flows(cid, t0, l1, l2, vs, "base", 1.0)
         del txns[mark:]
         ref[0] = ref0
-        main_rng, rng = rng, np.random.default_rng([SEED, c, 1])
+        main_rng, rng = rng, np.random.default_rng([SEED, c, ARGS.stream])
         if kind == "struct":  # 3x the victims; the extras stay out of victim_ids, which later draws read
             taken = {v["id"] for v in vs}
             extra = [p for p in pool if p["id"] not in taken]

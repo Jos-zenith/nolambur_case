@@ -69,7 +69,10 @@ MAX_INBOX = 50_000
 DEMO_PREFIX = "test."  # account ids of the test scams sent from the overview page
 DEMO_COOLDOWN = 10.0  # seconds between new test scams, across all visitors
 DEMO_MAX = 200  # test scams per bridge process
-RULE_VERSION = "r2.0"
+RULE_VERSIONS = ("r2.0", "r2.1")
+RULE_VERSION = os.getenv("RAIL_RULES", "r2.0")  # r2.1 is opt-in; see the R21_* constants
+if RULE_VERSION not in RULE_VERSIONS:
+    raise ValueError(f"RAIL_RULES must be one of {RULE_VERSIONS}, not {RULE_VERSION!r}")
 TICK_SECONDS = 0.5
 LEAD_IN_SECONDS = 45
 
@@ -78,10 +81,11 @@ DETECTORS = {
     "inflow_new_payers": "Inflow burst from new payers",
     "pass_through": "Rapid pass-through",
     "structuring": "Transfers split under the UPI cap",
+    "fan_in_new_payers": "Many new payers in a day (r2.1)",
     "hop_from_flagged": "Funds from a flagged account",
     "model_only": "Model-only flag",
 }
-PRIMARY = ("inflow_new_payers", "pass_through", "structuring")
+PRIMARY = ("inflow_new_payers", "pass_through", "structuring", "fan_in_new_payers")
 
 # r2.0 thresholds. Aggregated over windows, because the UPI P2P cap is ₹1 lakh a transfer
 # (NPCI): a large sum arrives as several smaller transfers, so a per-transfer threshold is
@@ -98,6 +102,17 @@ NEAR_CAP = 0.9 * P2P_CAP
 BASELINE_DAYS = 7
 BASELINE_MIN_ACTIVE = 5  # a baseline counts only for an account active on 5 of the last 7 days, so a new
                          # mule cannot raise its own bar by drip-feeding itself for a day or two
+
+# r2.1 (RAIL_RULES=r2.1). Written after the stress tests (reports/README.md 3.3) showed the fixed
+# ₹1 lakh pass-through floor misses rings that move half as much, and the near-cap rule misses
+# structuring into small payments. Peer values come from the train days of the base data only
+# (python -m infra.calibrate_r21); live, they would be recomputed daily from recent traffic.
+R21_PASS_FLOOR = 25_000  # modest absolute floor, for every account
+R21_OWN_MULT = 3.0  # an account with history: 3x its own busiest day in the last 7
+R21_PEER_BUSIEST = {"individual": 28_000, "supplier": 94_000}  # p95 of each kind's busiest day of P2P inflow
+R21_FANIN_PAYERS = 5  # distinct P2P payers new to an individual's account in 24 h; p99.9 on the train days is 3
+R21_FANIN_MIN_TOTAL = 5_000
+FRICTION_SCORE = 0.95  # RAIL_MODEL_FRICTION=1: a model-only alert this confident delays settlement (level 1)
 
 # Graded actions (the decision router picks a level; see RailEngine._route).
 LEVELS = {0: "alert_only", 1: "delay_settlement", 2: "hold_outbound", 3: "full_hold"}
@@ -264,6 +279,7 @@ class Dataset:
             )
         self.role = dict(zip(labels["account_id"].astype(str), labels["role"].astype(str)))
         self.bank = dict(zip(labels["account_id"].astype(str), labels["bank"].astype(str)))
+        self.kind = dict(zip(labels["account_id"].astype(str), labels["kind"].astype(str))) if "kind" in labels else {}
         self.vpa_to_id: dict[str, str] = {}
         for r in self.rows:
             self.vpa_to_id.setdefault(r.from_vpa, r.from_id)
@@ -286,6 +302,8 @@ class RailEngine:
         self.data = data
         self.auto_hold = auto_hold  # the decision router acts (graded restrictions); off = alert only
         self.model_threshold = model_threshold
+        self.rules = os.getenv("RAIL_RULES", RULE_VERSION)
+        self.model_friction = os.getenv("RAIL_MODEL_FRICTION", "0") == "1"
         speed = speed if speed is not None else float(data.meta.get("defaultSpeed", 4.0))
         self.record_actions = record_actions
         self.speed = speed
@@ -471,6 +489,8 @@ class RailEngine:
 
         self._check_inflow_new_payers(r)
         self._check_structuring(r)
+        if self.rules == "r2.1":
+            self._check_fan_in(r)
         self._check_pass_through(r)
         self._check_hop_from_flagged(r)
         self._check_model_only(r)
@@ -574,12 +594,13 @@ class RailEngine:
         usual daily inflow to alert."""
         acct = r.from_id
         base_in, base_ratio, active = self._baseline(acct, r.t)
+        floor = self._pass_floor(acct, base_in, active)
         for window, label in PASS_WINDOWS:
             ins = _window(self.inbound[acct], r.t - window)
             outs = _window(self.outbound[acct], r.t - window)
             inflow = sum(x.amount for x in ins)
             outflow = sum(x.amount for x in outs)
-            if inflow < PASS_FLOOR or len(outs) < 2 or len({x.to_id for x in outs}) < 2 or outflow < PASS_RATIO * inflow:
+            if inflow < floor or len(outs) < 2 or len({x.to_id for x in outs}) < 2 or outflow < PASS_RATIO * inflow:
                 continue
             if active >= BASELINE_MIN_ACTIVE and base_ratio >= FORWARDER_RATIO and inflow < FORWARDER_SCALE * base_in:
                 return  # an established forwarder at its usual scale
@@ -608,6 +629,47 @@ class RailEngine:
                 rows=sorted(ins + outs, key=lambda x: x.t),
             )
             return
+
+    def _pass_floor(self, acct: str, base_in: float, active: int) -> float:
+        """r2.0: ₹1 lakh for everyone. r2.1: relative. An account with history needs 3x its own
+        busiest day; a new one (cold start: no usable history) needs its peer group's p95 busiest
+        day. Both at least the ₹25,000 floor."""
+        if self.rules != "r2.1":
+            return PASS_FLOOR
+        if active >= BASELINE_MIN_ACTIVE:
+            return max(R21_PASS_FLOOR, R21_OWN_MULT * base_in)
+        return max(R21_PASS_FLOOR, R21_PEER_BUSIEST.get(self.data.kind.get(acct, ""), 0.0))
+
+    def _check_fan_in(self, r: Row) -> None:
+        """r2.1: 5+ different P2P payers, each paying this individual's account for the first
+        time, within 24 h. It counts people, not rupees, so splitting money smaller doesn't hide
+        it. Individuals only: shops and suppliers are meant to have many new payers."""
+        if not r.new_payee or r.channel != "P2P" or self.data.kind.get(r.to_id, "individual") != "individual":
+            return
+        acct = r.to_id
+        hits = [x for x in _window(self.inbound[acct], r.t - 86400) if x.new_payee and x.channel == "P2P"]
+        payers = {x.from_id for x in hits}
+        total = sum(x.amount for x in hits)
+        if len(payers) < R21_FANIN_PAYERS or total < R21_FANIN_MIN_TOTAL:
+            return
+        self._upsert(
+            "fan_in_new_payers",
+            acct,
+            severity="critical" if len(payers) >= 2 * R21_FANIN_PAYERS else "high",
+            base=72 + 2 * min(len(payers), 10),
+            title="Many new payers in a day",
+            reason=(
+                f"{len(payers)} different people who had never paid this account sent it money within 24 hours ({_inr(total)} in {len(hits)} transfers). "
+                f"On ordinary days an individual's account gets at most 3 new payers in 99.9% of cases. Scam victims are sent to mule accounts this way, "
+                "at any amount."
+            ),
+            facts=[
+                {"label": "New payers, 24 h", "value": str(len(payers))},
+                {"label": "From them", "value": _inr(total)},
+                {"label": "Transfers", "value": str(len(hits))},
+            ],
+            rows=hits,
+        )
 
     def _is_hop_source(self, account_id: str, t: float) -> bool:
         """Frozen or held, or flagged by a primary rule in the last 24h. Hop alerts don't propagate further."""
@@ -736,7 +798,9 @@ class RailEngine:
         model = max((a.gnn_max for a in active), default=0.0) >= self.model_threshold
         # the decision is about the account: its strongest open rule alert, with every detector that agrees
         severity = max((a.severity for a in rules), key=lambda x: SEV_RANK[x], default="low")
-        if not rules or SEV_RANK[severity] <= SEV_RANK["medium"]:
+        if not rules and self.model_friction and max((a.gnn_max for a in active), default=0.0) >= max(FRICTION_SCORE, self.model_threshold):
+            level, why = 1, f"model-only lead scored {FRICTION_SCORE:.2f}+: delay settlement (friction, not a hold)"
+        elif not rules or SEV_RANK[severity] <= SEV_RANK["medium"]:
             level, why = 0, "lead or medium severity: alert only"
         elif severity == "high":
             level, why = (2, f"high severity and model >= {self.model_threshold:.2f}") if model else (1, "high severity, model below threshold")
@@ -1618,7 +1682,8 @@ def evaluate_temporal(data: Dataset, model_threshold: float | None = None) -> di
         "leadSeconds": {"n": len(lead), "median": _pct(lead, 0.5), "p10": _pct(lead, 0.1), "p90": _pct(lead, 0.9),
                         "alertedBeforeMoneyLeft": sum(1 for x in lead if x > 0), "mulesThatForwarded": len(first_out), "note": "first time fraud money left a mule minus its first alert; negative = alerted after"},
         "secondsToAlert": {"n": len(to_alert), "median": _pct(to_alert, 0.5), "p90": _pct(to_alert, 0.9), "note": "first fraud inflow to a mule until its first alert"},
-        "ruleVersion": RULE_VERSION,
+        "ruleVersion": offline.rules,
+        "modelFriction": offline.model_friction,
     }
 
     del offline  # two whole-dataset replays at once do not fit a 512 MB instance
@@ -1644,6 +1709,7 @@ def evaluate_temporal(data: Dataset, model_threshold: float | None = None) -> di
         "fraudLost": fraud_total - blocked - recovered,
         "genuineBlocked": sum(r.amount for r in prow if r.is_fraud == 0 and r.blocked),
         "genuineDelayedThenReleased": sum(r.amount for r in prow if r.is_fraud == 0 and r.delayed and not r.blocked),
+        "fraudDelayed": sum(r.amount for r in prow if r.is_fraud == 1 and r.delayed),
         "restrictions": {LEVELS[k]: sum(1 for e in restr if e["level"] == k) for k in (1, 2, 3)},
         "restrictedAccounts": len({e["account"] for e in restr}),
         "restrictedMules": len({e["account"] for e in restr if e["role"] in mule_roles}),
