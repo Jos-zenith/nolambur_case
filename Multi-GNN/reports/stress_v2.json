@@ -1,0 +1,1093 @@
+{
+  "createdAt": "2026-10-01T01:26:39",
+  "protocol": "test days 8-9 only; frozen = production checkpoint and its validation threshold, variant applied to the test campaigns only; retrained = same recipe (seed 42, 12 epochs) on data where every campaign has the variant; rules r2.0 unchanged",
+  "metrics": {
+    "recall": "mules found by rules + model / mules active on the test days",
+    "precision": "mules / accounts alerted by rules + model",
+    "leadMedianSeconds": "median over alerted mules of (first time fraud money left the mule - first alert); negative = too late",
+    "alertedBeforeMoneyLeft": "mules alerted before any fraud money left them / mules that forwarded fraud money",
+    "moneyStoppedShare": "fraud money stopped by graded holds, router acting alone / all test-day fraud money"
+  },
+  "collapseRecall": 0.4,
+  "rows": {
+    "base/frozen": {
+      "variant": "base",
+      "model": "frozen",
+      "scope": "test",
+      "fraud": {
+        "payments": 57,
+        "medianAmount": 22559.0,
+        "maxAmount": 100000.0,
+        "victimTotal": 800000.0,
+        "allLayersTotal": 1658542.0
+      },
+      "recall": 0.7692307692307693,
+      "precision": 0.6896551724137931,
+      "leadMedianSeconds": 11366.0,
+      "alertedBeforeMoneyLeft": 0.7692307692307693,
+      "moneyStoppedShare": 0.1665685885554903,
+      "rulesOnlyRecall": 0.5769230769230769,
+      "rulesOnlyPrecision": 0.6818181818181818,
+      "modelEdgeRecall": 0.7894736842105263,
+      "modelEdgePrecision": 0.9574468085106383,
+      "counts": {
+        "mulesActive": 26,
+        "mulesFound": 20,
+        "falseAccounts": 9,
+        "rulesOnlyFound": 15,
+        "rulesOnlyFalse": 7,
+        "mulesThatForwarded": 13,
+        "alertedBeforeMoneyLeft": 10,
+        "fraudPayments": 57,
+        "modelCaught": 45,
+        "modelFalse": 2,
+        "fraudTotal": 1658542.0,
+        "fraudStopped": 276261.0,
+        "genuineBlocked": 6640.0,
+        "innocentRestricted": 0
+      },
+      "threshold": 0.86,
+      "byDetector": [
+        {
+          "detector": "inflow_new_payers",
+          "label": "Inflow burst from new payers",
+          "alerts": 1,
+          "mules": 1,
+          "precision": 1.0
+        },
+        {
+          "detector": "pass_through",
+          "label": "Rapid pass-through",
+          "alerts": 5,
+          "mules": 5,
+          "precision": 1.0
+        },
+        {
+          "detector": "structuring",
+          "label": "Transfers split under the UPI cap",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "hop_from_flagged",
+          "label": "Funds from a flagged account",
+          "alerts": 17,
+          "mules": 10,
+          "precision": 0.5882352941176471
+        },
+        {
+          "detector": "model_only",
+          "label": "Model-only flag",
+          "alerts": 14,
+          "mules": 12,
+          "precision": 0.8571428571428571
+        }
+      ],
+      "precisionCi": [
+        0.5077,
+        0.8272
+      ],
+      "recallCi": [
+        0.5795,
+        0.8897
+      ]
+    },
+    "redraw/frozen": {
+      "variant": "redraw",
+      "model": "frozen",
+      "scope": "test",
+      "fraud": {
+        "payments": 57,
+        "medianAmount": 24680.0,
+        "maxAmount": 100000.0,
+        "victimTotal": 767518.0,
+        "allLayersTotal": 1789366.0
+      },
+      "recall": 0.5833333333333334,
+      "precision": 0.5833333333333334,
+      "leadMedianSeconds": 11017.0,
+      "alertedBeforeMoneyLeft": 0.6875,
+      "moneyStoppedShare": 0.10872063065912731,
+      "rulesOnlyRecall": 0.5,
+      "rulesOnlyPrecision": 0.6,
+      "modelEdgeRecall": 0.8070175438596491,
+      "modelEdgePrecision": 0.9583333333333334,
+      "counts": {
+        "mulesActive": 24,
+        "mulesFound": 14,
+        "falseAccounts": 10,
+        "rulesOnlyFound": 12,
+        "rulesOnlyFalse": 8,
+        "mulesThatForwarded": 16,
+        "alertedBeforeMoneyLeft": 11,
+        "fraudPayments": 57,
+        "modelCaught": 46,
+        "modelFalse": 2,
+        "fraudTotal": 1789366.0,
+        "fraudStopped": 194541.0,
+        "genuineBlocked": 4256.0,
+        "innocentRestricted": 0
+      },
+      "threshold": 0.86,
+      "byDetector": [
+        {
+          "detector": "inflow_new_payers",
+          "label": "Inflow burst from new payers",
+          "alerts": 1,
+          "mules": 1,
+          "precision": 1.0
+        },
+        {
+          "detector": "pass_through",
+          "label": "Rapid pass-through",
+          "alerts": 5,
+          "mules": 5,
+          "precision": 1.0
+        },
+        {
+          "detector": "structuring",
+          "label": "Transfers split under the UPI cap",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "hop_from_flagged",
+          "label": "Funds from a flagged account",
+          "alerts": 16,
+          "mules": 8,
+          "precision": 0.5
+        },
+        {
+          "detector": "model_only",
+          "label": "Model-only flag",
+          "alerts": 10,
+          "mules": 8,
+          "precision": 0.8
+        }
+      ],
+      "precisionCi": [
+        0.3883,
+        0.7553
+      ],
+      "recallCi": [
+        0.3883,
+        0.7553
+      ]
+    },
+    "fast/frozen": {
+      "variant": "fast",
+      "model": "frozen",
+      "scope": "test",
+      "fraud": {
+        "payments": 46,
+        "medianAmount": 25544.5,
+        "maxAmount": 100000.0,
+        "victimTotal": 767518.0,
+        "allLayersTotal": 1567790.0
+      },
+      "recall": 0.6086956521739131,
+      "precision": 0.7,
+      "leadMedianSeconds": 37.0,
+      "alertedBeforeMoneyLeft": 0.7,
+      "moneyStoppedShare": 0.19117228710477807,
+      "rulesOnlyRecall": 0.391304347826087,
+      "rulesOnlyPrecision": 0.6428571428571429,
+      "modelEdgeRecall": 0.717391304347826,
+      "modelEdgePrecision": 0.9705882352941176,
+      "counts": {
+        "mulesActive": 23,
+        "mulesFound": 14,
+        "falseAccounts": 6,
+        "rulesOnlyFound": 9,
+        "rulesOnlyFalse": 5,
+        "mulesThatForwarded": 10,
+        "alertedBeforeMoneyLeft": 7,
+        "fraudPayments": 46,
+        "modelCaught": 33,
+        "modelFalse": 1,
+        "fraudTotal": 1567790.0,
+        "fraudStopped": 299718.0,
+        "genuineBlocked": 6521.0,
+        "innocentRestricted": 0
+      },
+      "threshold": 0.86,
+      "byDetector": [
+        {
+          "detector": "inflow_new_payers",
+          "label": "Inflow burst from new payers",
+          "alerts": 1,
+          "mules": 1,
+          "precision": 1.0
+        },
+        {
+          "detector": "pass_through",
+          "label": "Rapid pass-through",
+          "alerts": 4,
+          "mules": 4,
+          "precision": 1.0
+        },
+        {
+          "detector": "structuring",
+          "label": "Transfers split under the UPI cap",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "hop_from_flagged",
+          "label": "Funds from a flagged account",
+          "alerts": 10,
+          "mules": 5,
+          "precision": 0.5
+        },
+        {
+          "detector": "model_only",
+          "label": "Model-only flag",
+          "alerts": 11,
+          "mules": 10,
+          "precision": 0.9090909090909091
+        }
+      ],
+      "precisionCi": [
+        0.481,
+        0.8545
+      ],
+      "recallCi": [
+        0.4079,
+        0.7784
+      ]
+    },
+    "struct/frozen": {
+      "variant": "struct",
+      "model": "frozen",
+      "scope": "test",
+      "fraud": {
+        "payments": 608,
+        "medianAmount": 3064.5,
+        "maxAmount": 4975.0,
+        "victimTotal": 983761.0,
+        "allLayersTotal": 1959547.0
+      },
+      "recall": 0.3333333333333333,
+      "precision": 0.55,
+      "leadMedianSeconds": 25303.0,
+      "alertedBeforeMoneyLeft": 0.2857142857142857,
+      "moneyStoppedShare": 0.0,
+      "rulesOnlyRecall": 0.3333333333333333,
+      "rulesOnlyPrecision": 0.5789473684210527,
+      "modelEdgeRecall": 0.0,
+      "modelEdgePrecision": 0.0,
+      "counts": {
+        "mulesActive": 33,
+        "mulesFound": 11,
+        "falseAccounts": 9,
+        "rulesOnlyFound": 11,
+        "rulesOnlyFalse": 8,
+        "mulesThatForwarded": 21,
+        "alertedBeforeMoneyLeft": 6,
+        "fraudPayments": 608,
+        "modelCaught": 0,
+        "modelFalse": 1,
+        "fraudTotal": 1959547.0,
+        "fraudStopped": 0,
+        "genuineBlocked": 0,
+        "innocentRestricted": 0
+      },
+      "threshold": 0.86,
+      "byDetector": [
+        {
+          "detector": "inflow_new_payers",
+          "label": "Inflow burst from new payers",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "pass_through",
+          "label": "Rapid pass-through",
+          "alerts": 3,
+          "mules": 3,
+          "precision": 1.0
+        },
+        {
+          "detector": "structuring",
+          "label": "Transfers split under the UPI cap",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "hop_from_flagged",
+          "label": "Funds from a flagged account",
+          "alerts": 16,
+          "mules": 8,
+          "precision": 0.5
+        },
+        {
+          "detector": "model_only",
+          "label": "Model-only flag",
+          "alerts": 1,
+          "mules": 0,
+          "precision": 0.0
+        }
+      ],
+      "precisionCi": [
+        0.3421,
+        0.7418
+      ],
+      "recallCi": [
+        0.1975,
+        0.5039
+      ]
+    },
+    "struct/retrained": {
+      "variant": "struct",
+      "model": "retrained",
+      "scope": "all",
+      "fraud": {
+        "payments": 621,
+        "medianAmount": 3067.0,
+        "maxAmount": 4975.0,
+        "victimTotal": 999764.0,
+        "allLayersTotal": 2002239.0
+      },
+      "recall": 0.45454545454545453,
+      "precision": 0.7142857142857143,
+      "leadMedianSeconds": 51487.5,
+      "alertedBeforeMoneyLeft": 0.5384615384615384,
+      "moneyStoppedShare": 0.09526185435405064,
+      "rulesOnlyRecall": 0.25,
+      "rulesOnlyPrecision": 0.5789473684210527,
+      "modelEdgeRecall": 0.5475040257648953,
+      "modelEdgePrecision": 0.9912536443148688,
+      "counts": {
+        "mulesActive": 44,
+        "mulesFound": 20,
+        "falseAccounts": 8,
+        "rulesOnlyFound": 11,
+        "rulesOnlyFalse": 8,
+        "mulesThatForwarded": 26,
+        "alertedBeforeMoneyLeft": 14,
+        "fraudPayments": 621,
+        "modelCaught": 340,
+        "modelFalse": 3,
+        "fraudTotal": 2002239.0,
+        "fraudStopped": 190737.0,
+        "genuineBlocked": 9102.0,
+        "innocentRestricted": 0
+      },
+      "threshold": 0.05,
+      "byDetector": [
+        {
+          "detector": "inflow_new_payers",
+          "label": "Inflow burst from new payers",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "pass_through",
+          "label": "Rapid pass-through",
+          "alerts": 3,
+          "mules": 3,
+          "precision": 1.0
+        },
+        {
+          "detector": "structuring",
+          "label": "Transfers split under the UPI cap",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "hop_from_flagged",
+          "label": "Funds from a flagged account",
+          "alerts": 16,
+          "mules": 8,
+          "precision": 0.5
+        },
+        {
+          "detector": "model_only",
+          "label": "Model-only flag",
+          "alerts": 19,
+          "mules": 19,
+          "precision": 1.0
+        }
+      ],
+      "precisionCi": [
+        0.5294,
+        0.8475
+      ],
+      "recallCi": [
+        0.3171,
+        0.5993
+      ]
+    },
+    "low_0.5/frozen": {
+      "variant": "low_0.5",
+      "model": "frozen",
+      "scope": "test",
+      "fraud": {
+        "payments": 57,
+        "medianAmount": 12340.0,
+        "maxAmount": 50000.0,
+        "victimTotal": 383759.0,
+        "allLayersTotal": 894682.0
+      },
+      "recall": 0.375,
+      "precision": 0.9,
+      "leadMedianSeconds": 13851.0,
+      "alertedBeforeMoneyLeft": 0.5,
+      "moneyStoppedShare": 0.0,
+      "rulesOnlyRecall": 0.0,
+      "rulesOnlyPrecision": 0.0,
+      "modelEdgeRecall": 0.3157894736842105,
+      "modelEdgePrecision": 0.9473684210526315,
+      "counts": {
+        "mulesActive": 24,
+        "mulesFound": 9,
+        "falseAccounts": 1,
+        "rulesOnlyFound": 0,
+        "rulesOnlyFalse": 0,
+        "mulesThatForwarded": 16,
+        "alertedBeforeMoneyLeft": 8,
+        "fraudPayments": 57,
+        "modelCaught": 18,
+        "modelFalse": 1,
+        "fraudTotal": 894682.0,
+        "fraudStopped": 0,
+        "genuineBlocked": 0,
+        "innocentRestricted": 0
+      },
+      "threshold": 0.86,
+      "byDetector": [
+        {
+          "detector": "inflow_new_payers",
+          "label": "Inflow burst from new payers",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "pass_through",
+          "label": "Rapid pass-through",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "structuring",
+          "label": "Transfers split under the UPI cap",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "hop_from_flagged",
+          "label": "Funds from a flagged account",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "model_only",
+          "label": "Model-only flag",
+          "alerts": 10,
+          "mules": 9,
+          "precision": 0.9
+        }
+      ],
+      "precisionCi": [
+        0.5958,
+        0.9821
+      ],
+      "recallCi": [
+        0.2116,
+        0.5729
+      ]
+    },
+    "low_0.5/retrained": {
+      "variant": "low_0.5",
+      "model": "retrained",
+      "scope": "all",
+      "fraud": {
+        "payments": 61,
+        "medianAmount": 11094.0,
+        "maxAmount": 50000.0,
+        "victimTotal": 383759.0,
+        "allLayersTotal": 936695.0
+      },
+      "recall": 0.4827586206896552,
+      "precision": 0.6363636363636364,
+      "leadMedianSeconds": 11338.0,
+      "alertedBeforeMoneyLeft": 0.6470588235294118,
+      "moneyStoppedShare": 0.0,
+      "rulesOnlyRecall": 0.0,
+      "rulesOnlyPrecision": 0.0,
+      "modelEdgeRecall": 0.8032786885245902,
+      "modelEdgePrecision": 0.8596491228070176,
+      "counts": {
+        "mulesActive": 29,
+        "mulesFound": 14,
+        "falseAccounts": 8,
+        "rulesOnlyFound": 0,
+        "rulesOnlyFalse": 0,
+        "mulesThatForwarded": 17,
+        "alertedBeforeMoneyLeft": 11,
+        "fraudPayments": 61,
+        "modelCaught": 49,
+        "modelFalse": 8,
+        "fraudTotal": 936695.0,
+        "fraudStopped": 0,
+        "genuineBlocked": 0,
+        "innocentRestricted": 0
+      },
+      "threshold": 0.96,
+      "byDetector": [
+        {
+          "detector": "inflow_new_payers",
+          "label": "Inflow burst from new payers",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "pass_through",
+          "label": "Rapid pass-through",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "structuring",
+          "label": "Transfers split under the UPI cap",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "hop_from_flagged",
+          "label": "Funds from a flagged account",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "model_only",
+          "label": "Model-only flag",
+          "alerts": 22,
+          "mules": 14,
+          "precision": 0.6363636363636364
+        }
+      ],
+      "precisionCi": [
+        0.4295,
+        0.8027
+      ],
+      "recallCi": [
+        0.3139,
+        0.6557
+      ]
+    },
+    "low_0.2/frozen": {
+      "variant": "low_0.2",
+      "model": "frozen",
+      "scope": "test",
+      "fraud": {
+        "payments": 57,
+        "medianAmount": 4936.0,
+        "maxAmount": 20000.0,
+        "victimTotal": 153504.0,
+        "allLayersTotal": 357873.0
+      },
+      "recall": 0.0,
+      "precision": 0.0,
+      "leadMedianSeconds": 672999.0,
+      "alertedBeforeMoneyLeft": 0.25,
+      "moneyStoppedShare": 0.0,
+      "rulesOnlyRecall": 0.0,
+      "rulesOnlyPrecision": 0.0,
+      "modelEdgeRecall": 0.0,
+      "modelEdgePrecision": 0.0,
+      "counts": {
+        "mulesActive": 24,
+        "mulesFound": 0,
+        "falseAccounts": 1,
+        "rulesOnlyFound": 0,
+        "rulesOnlyFalse": 0,
+        "mulesThatForwarded": 16,
+        "alertedBeforeMoneyLeft": 4,
+        "fraudPayments": 57,
+        "modelCaught": 0,
+        "modelFalse": 1,
+        "fraudTotal": 357873.0,
+        "fraudStopped": 0,
+        "genuineBlocked": 0,
+        "innocentRestricted": 0
+      },
+      "threshold": 0.86,
+      "byDetector": [
+        {
+          "detector": "inflow_new_payers",
+          "label": "Inflow burst from new payers",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "pass_through",
+          "label": "Rapid pass-through",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "structuring",
+          "label": "Transfers split under the UPI cap",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "hop_from_flagged",
+          "label": "Funds from a flagged account",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "model_only",
+          "label": "Model-only flag",
+          "alerts": 1,
+          "mules": 0,
+          "precision": 0.0
+        }
+      ],
+      "precisionCi": [
+        0.0,
+        0.7935
+      ],
+      "recallCi": [
+        0.0,
+        0.138
+      ]
+    },
+    "low_0.2/retrained": {
+      "variant": "low_0.2",
+      "model": "retrained",
+      "scope": "all",
+      "fraud": {
+        "payments": 61,
+        "medianAmount": 4438.0,
+        "maxAmount": 20000.0,
+        "victimTotal": 153504.0,
+        "allLayersTotal": 374678.0
+      },
+      "recall": 0.06896551724137931,
+      "precision": 0.14285714285714285,
+      "leadMedianSeconds": 624399.0,
+      "alertedBeforeMoneyLeft": 0.23529411764705882,
+      "moneyStoppedShare": 0.0,
+      "rulesOnlyRecall": 0.0,
+      "rulesOnlyPrecision": 0.0,
+      "modelEdgeRecall": 0.11475409836065574,
+      "modelEdgePrecision": 0.35,
+      "counts": {
+        "mulesActive": 29,
+        "mulesFound": 2,
+        "falseAccounts": 12,
+        "rulesOnlyFound": 0,
+        "rulesOnlyFalse": 0,
+        "mulesThatForwarded": 17,
+        "alertedBeforeMoneyLeft": 4,
+        "fraudPayments": 61,
+        "modelCaught": 7,
+        "modelFalse": 13,
+        "fraudTotal": 374678.0,
+        "fraudStopped": 0,
+        "genuineBlocked": 0,
+        "innocentRestricted": 0
+      },
+      "threshold": 0.94,
+      "byDetector": [
+        {
+          "detector": "inflow_new_payers",
+          "label": "Inflow burst from new payers",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "pass_through",
+          "label": "Rapid pass-through",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "structuring",
+          "label": "Transfers split under the UPI cap",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "hop_from_flagged",
+          "label": "Funds from a flagged account",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "model_only",
+          "label": "Model-only flag",
+          "alerts": 14,
+          "mules": 2,
+          "precision": 0.14285714285714285
+        }
+      ],
+      "precisionCi": [
+        0.0401,
+        0.3994
+      ],
+      "recallCi": [
+        0.0191,
+        0.2196
+      ]
+    },
+    "low_0.1/frozen": {
+      "variant": "low_0.1",
+      "model": "frozen",
+      "scope": "test",
+      "fraud": {
+        "payments": 57,
+        "medianAmount": 2468.0,
+        "maxAmount": 10000.0,
+        "victimTotal": 76752.0,
+        "allLayersTotal": 178938.0
+      },
+      "recall": 0.0,
+      "precision": 0.0,
+      "leadMedianSeconds": 672999.0,
+      "alertedBeforeMoneyLeft": 0.25,
+      "moneyStoppedShare": 0.0,
+      "rulesOnlyRecall": 0.0,
+      "rulesOnlyPrecision": 0.0,
+      "modelEdgeRecall": 0.0,
+      "modelEdgePrecision": 0.0,
+      "counts": {
+        "mulesActive": 24,
+        "mulesFound": 0,
+        "falseAccounts": 1,
+        "rulesOnlyFound": 0,
+        "rulesOnlyFalse": 0,
+        "mulesThatForwarded": 16,
+        "alertedBeforeMoneyLeft": 4,
+        "fraudPayments": 57,
+        "modelCaught": 0,
+        "modelFalse": 1,
+        "fraudTotal": 178938.0,
+        "fraudStopped": 0,
+        "genuineBlocked": 0,
+        "innocentRestricted": 0
+      },
+      "threshold": 0.86,
+      "byDetector": [
+        {
+          "detector": "inflow_new_payers",
+          "label": "Inflow burst from new payers",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "pass_through",
+          "label": "Rapid pass-through",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "structuring",
+          "label": "Transfers split under the UPI cap",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "hop_from_flagged",
+          "label": "Funds from a flagged account",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "model_only",
+          "label": "Model-only flag",
+          "alerts": 1,
+          "mules": 0,
+          "precision": 0.0
+        }
+      ],
+      "precisionCi": [
+        0.0,
+        0.7935
+      ],
+      "recallCi": [
+        0.0,
+        0.138
+      ]
+    },
+    "low_0.1/retrained": {
+      "variant": "low_0.1",
+      "model": "retrained",
+      "scope": "all",
+      "fraud": {
+        "payments": 61,
+        "medianAmount": 2220.0,
+        "maxAmount": 10000.0,
+        "victimTotal": 76752.0,
+        "allLayersTotal": 187341.0
+      },
+      "recall": 0.034482758620689655,
+      "precision": 0.043478260869565216,
+      "leadMedianSeconds": 636415.5,
+      "alertedBeforeMoneyLeft": 0.17647058823529413,
+      "moneyStoppedShare": 0.0,
+      "rulesOnlyRecall": 0.0,
+      "rulesOnlyPrecision": 0.0,
+      "modelEdgeRecall": 0.01639344262295082,
+      "modelEdgePrecision": 0.034482758620689655,
+      "counts": {
+        "mulesActive": 29,
+        "mulesFound": 1,
+        "falseAccounts": 22,
+        "rulesOnlyFound": 0,
+        "rulesOnlyFalse": 0,
+        "mulesThatForwarded": 17,
+        "alertedBeforeMoneyLeft": 3,
+        "fraudPayments": 61,
+        "modelCaught": 1,
+        "modelFalse": 28,
+        "fraudTotal": 187341.0,
+        "fraudStopped": 0,
+        "genuineBlocked": 0,
+        "innocentRestricted": 0
+      },
+      "threshold": 0.89,
+      "byDetector": [
+        {
+          "detector": "inflow_new_payers",
+          "label": "Inflow burst from new payers",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "pass_through",
+          "label": "Rapid pass-through",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "structuring",
+          "label": "Transfers split under the UPI cap",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "hop_from_flagged",
+          "label": "Funds from a flagged account",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "model_only",
+          "label": "Model-only flag",
+          "alerts": 23,
+          "mules": 1,
+          "precision": 0.043478260869565216
+        }
+      ],
+      "precisionCi": [
+        0.0077,
+        0.2099
+      ],
+      "recallCi": [
+        0.0061,
+        0.1718
+      ]
+    },
+    "low_0.05/frozen": {
+      "variant": "low_0.05",
+      "model": "frozen",
+      "scope": "test",
+      "fraud": {
+        "payments": 57,
+        "medianAmount": 1234.0,
+        "maxAmount": 5000.0,
+        "victimTotal": 38375.0,
+        "allLayersTotal": 89465.0
+      },
+      "recall": 0.0,
+      "precision": 0.0,
+      "leadMedianSeconds": 672999.0,
+      "alertedBeforeMoneyLeft": 0.25,
+      "moneyStoppedShare": 0.0,
+      "rulesOnlyRecall": 0.0,
+      "rulesOnlyPrecision": 0.0,
+      "modelEdgeRecall": 0.0,
+      "modelEdgePrecision": 0.0,
+      "counts": {
+        "mulesActive": 24,
+        "mulesFound": 0,
+        "falseAccounts": 1,
+        "rulesOnlyFound": 0,
+        "rulesOnlyFalse": 0,
+        "mulesThatForwarded": 16,
+        "alertedBeforeMoneyLeft": 4,
+        "fraudPayments": 57,
+        "modelCaught": 0,
+        "modelFalse": 1,
+        "fraudTotal": 89465.0,
+        "fraudStopped": 0,
+        "genuineBlocked": 0,
+        "innocentRestricted": 0
+      },
+      "threshold": 0.86,
+      "byDetector": [
+        {
+          "detector": "inflow_new_payers",
+          "label": "Inflow burst from new payers",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "pass_through",
+          "label": "Rapid pass-through",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "structuring",
+          "label": "Transfers split under the UPI cap",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "hop_from_flagged",
+          "label": "Funds from a flagged account",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "model_only",
+          "label": "Model-only flag",
+          "alerts": 1,
+          "mules": 0,
+          "precision": 0.0
+        }
+      ],
+      "precisionCi": [
+        0.0,
+        0.7935
+      ],
+      "recallCi": [
+        0.0,
+        0.138
+      ]
+    },
+    "low_0.05/retrained": {
+      "variant": "low_0.05",
+      "model": "retrained",
+      "scope": "all",
+      "fraud": {
+        "payments": 61,
+        "medianAmount": 1110.0,
+        "maxAmount": 5000.0,
+        "victimTotal": 38375.0,
+        "allLayersTotal": 93666.0
+      },
+      "recall": 0.10344827586206896,
+      "precision": 0.01020408163265306,
+      "leadMedianSeconds": 414212.0,
+      "alertedBeforeMoneyLeft": 0.29411764705882354,
+      "moneyStoppedShare": 0.0,
+      "rulesOnlyRecall": 0.0,
+      "rulesOnlyPrecision": 0.0,
+      "modelEdgeRecall": 0.2459016393442623,
+      "modelEdgePrecision": 0.02336448598130841,
+      "counts": {
+        "mulesActive": 29,
+        "mulesFound": 3,
+        "falseAccounts": 291,
+        "rulesOnlyFound": 0,
+        "rulesOnlyFalse": 0,
+        "mulesThatForwarded": 17,
+        "alertedBeforeMoneyLeft": 5,
+        "fraudPayments": 61,
+        "modelCaught": 15,
+        "modelFalse": 627,
+        "fraudTotal": 93666.0,
+        "fraudStopped": 0,
+        "genuineBlocked": 0,
+        "innocentRestricted": 0
+      },
+      "threshold": 0.52,
+      "byDetector": [
+        {
+          "detector": "inflow_new_payers",
+          "label": "Inflow burst from new payers",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "pass_through",
+          "label": "Rapid pass-through",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "structuring",
+          "label": "Transfers split under the UPI cap",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "hop_from_flagged",
+          "label": "Funds from a flagged account",
+          "alerts": 0,
+          "mules": 0,
+          "precision": null
+        },
+        {
+          "detector": "model_only",
+          "label": "Model-only flag",
+          "alerts": 294,
+          "mules": 3,
+          "precision": 0.01020408163265306
+        }
+      ],
+      "precisionCi": [
+        0.0035,
+        0.0296
+      ],
+      "recallCi": [
+        0.0358,
+        0.2639
+      ]
+    }
+  }
+}

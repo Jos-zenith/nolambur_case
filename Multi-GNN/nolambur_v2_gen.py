@@ -26,10 +26,19 @@ Outputs, in nolambur_v2/:
   stats.json         counts, and which campaign falls in which split
 
     python nolambur_v2_gen.py && python prepare_datasets.py --nolambur-only --dataset v2
+
+Stress variants (infra/stress.py drives them). They change only the campaigns in scope, after
+their mules' camouflage is drawn, so with --scope test days 0-7 are byte-identical to base:
+    redraw  base behaviour on the variants' own random stream: the control for the others
+    fast    mules forward within about a minute (median 25 s), payments seconds apart
+    struct  3x the victims, each paying a third as much per day, every hop in ₹2-5k payments
+    low     every fraud amount (and the forwarding floors) multiplied by --scale
+    python nolambur_v2_gen.py --variant low --scale 0.1 --scope test --out data/variants/low_0.1/nolambur_v2
 """
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 import math
@@ -42,7 +51,14 @@ import numpy as np
 SEED = 7
 DAYS = 10
 BASE = datetime(2024, 3, 11, 0, 0, 0)
-OUT = Path(__file__).resolve().parent / "nolambur_v2"
+_cli = argparse.ArgumentParser(description="Nolambur v2 generator")
+_cli.add_argument("--variant", choices=["base", "redraw", "fast", "struct", "low"], default="base")
+_cli.add_argument("--scale", type=float, default=1.0, help="low: multiply every fraud amount by this")
+_cli.add_argument("--scope", choices=["test", "all"], default="test", help="campaigns the variant applies to: test (days 8-9) or all")
+_cli.add_argument("--out", type=Path, default=Path(__file__).resolve().parent / "nolambur_v2")
+ARGS = _cli.parse_args()
+VARIANT, SCALE = ARGS.variant, (ARGS.scale if ARGS.variant == "low" else 1.0)
+OUT = ARGS.out
 
 P2P_CAP = 100_000  # NPCI per-transaction limit for P2P
 VICTIM_DAILY_CAP = 100_000  # typical per-account daily P2P limit
@@ -185,6 +201,91 @@ def camouflage(mule: dict, start: float) -> None:
                 pay(other, mule, lognormal(900, 1.0, 50, 30_000), at(day), "P2P")
 
 
+def campaign_flows(cid: str, t0: datetime, l1: list[dict], l2: list[dict], vs: list[dict], kind: str, scale: float) -> None:
+    """Victim payments and the mules' forwarding for one campaign. Draws from the module `rng`."""
+    inbound: dict[str, list[tuple[datetime, float]]] = {m["id"]: [] for m in l1}
+    for v in vs:
+        days_paying = int(rng.integers(1, 3))
+        t = t0 + timedelta(minutes=float(rng.uniform(0, 90)))
+        for d in range(days_paying):
+            day_total, budget = 0.0, VICTIM_DAILY_CAP
+            if kind == "struct":  # a third of the money per victim, in ₹2-5k payments
+                budget = VICTIM_DAILY_CAP / 3
+                while budget >= 2_000:
+                    amt = min(budget, float(rng.uniform(2_000, 5_000)))
+                    mule = l1[int(rng.integers(0, len(l1)))]
+                    pay(v, mule, amt, t, "P2P", True, "L0→L1", cid)
+                    inbound[mule["id"]].append((t, amt))
+                    budget -= amt
+                    t += timedelta(minutes=float(rng.uniform(4, 45)))
+                t = t0 + timedelta(days=d + 1, minutes=float(rng.uniform(0, 240)))
+                continue
+            for _ in range(int(rng.integers(1, 4))):
+                if budget < 5_000:
+                    break
+                style = rng.random()
+                if style < 0.45:
+                    amt = budget if budget <= P2P_CAP else P2P_CAP - int(rng.integers(1, 2_000))  # up to the cap
+                    amt = min(amt, budget)
+                elif style < 0.75:
+                    amt = min(budget, float(rng.choice([49_999, 50_000, 25_000, 99_000, 95_000])))
+                else:
+                    amt = min(budget, lognormal(40_000, 0.5, 5_000, P2P_CAP))
+                mule = l1[int(rng.integers(0, len(l1)))]
+                pay(v, mule, amt * scale, t, "P2P", True, "L0→L1", cid)
+                inbound[mule["id"]].append((t, amt * scale))
+                budget -= amt
+                day_total += amt
+                t += timedelta(minutes=float(rng.uniform(4, 45)))
+            t = t0 + timedelta(days=d + 1, minutes=float(rng.uniform(0, 240)))
+
+    # L1: forward most of each receipt, on its own schedule
+    for m in l1:
+        patient = rng.random() < 0.35  # waits hours rather than minutes
+        for t_in, amt_in in inbound[m["id"]]:
+            if kind == "fast":  # automated: median 25 s, about 85% within a minute
+                delay = rng.lognormal(math.log(25 / 60), 0.8)
+            else:
+                delay = rng.lognormal(math.log(150 if patient else 8), 0.6)  # minutes
+            t_out = t_in + timedelta(minutes=float(delay))
+            remaining = amt_in * rng.uniform(0.75, 0.97)
+            floor = 2_000 if kind == "struct" else 3_000 * scale
+            while remaining > floor:
+                if kind == "struct":
+                    amt = min(remaining, float(rng.uniform(2_000, 5_000)))
+                else:
+                    amt = min(remaining, lognormal(30_000 * scale, 0.6, 5_000 * scale, P2P_CAP))
+                dst = l2[int(rng.integers(0, len(l2)))]
+                pay(m, dst, amt, t_out, "P2P", True, "L1→L2", cid)
+                remaining -= amt
+                t_out += timedelta(seconds=float(rng.uniform(2, 20))) if kind == "fast" else timedelta(minutes=float(rng.uniform(0.5, 6)))
+    # L2: some forward again, a few hours later, to other accounts in the network
+    received: dict[str, float] = {}
+    first_in: dict[str, datetime] = {}
+    for tx in txns:
+        if tx["campaign"] == cid and tx["layer"] == "L1→L2":
+            received[tx["recv_id"]] = received.get(tx["recv_id"], 0.0) + tx["amount_inr"]
+            ts_in = datetime.fromisoformat(tx["timestamp"])
+            first_in[tx["recv_id"]] = min(first_in.get(tx["recv_id"], ts_in), ts_in)
+    for m in l2:
+        if m["id"] in received and rng.random() < 0.45 and len(l2) > 1:
+            t_out = t0 + timedelta(hours=float(rng.uniform(2, MAX_SPAN_HOURS - 2)))
+            if kind == "fast":  # straight after the first receipt
+                t_out = first_in[m["id"]] + timedelta(minutes=float(rng.lognormal(math.log(25 / 60), 0.8)))
+            remaining = received[m["id"]] * rng.uniform(0.5, 0.9)
+            floor = 2_000 if kind == "struct" else 3_000 * scale
+            while remaining > floor:
+                if kind == "struct":
+                    amt = min(remaining, float(rng.uniform(2_000, 5_000)))
+                else:
+                    amt = min(remaining, lognormal(20_000 * scale, 0.6, 3_000 * scale, P2P_CAP))
+                dst = l2[int(rng.integers(0, len(l2)))]
+                if dst["id"] != m["id"]:
+                    pay(m, dst, amt, t_out, "P2P", True, "L2→L2", cid)
+                remaining -= amt
+                t_out += timedelta(seconds=float(rng.uniform(2, 20))) if kind == "fast" else timedelta(minutes=float(rng.uniform(1, 20)))
+
+
 for c, start in enumerate(CAMPAIGN_STARTS, 1):
     cid = f"C{c:02d}"
     t0 = BASE + timedelta(days=start)
@@ -198,72 +299,41 @@ for c, start in enumerate(CAMPAIGN_STARTS, 1):
     mules_l2 += [x for x in l2 if x not in mules_l2]
 
     # victims are ordinary people with their own history
+    shifted = VARIANT != "base" and (ARGS.scope == "all" or start >= 8)
+    kind = VARIANT if shifted else "base"
+    scale = SCALE if shifted else 1.0
     pool = [p for p in people if p["id"] not in victim_ids]
     vs = [pool[i] for i in rng.choice(len(pool), int(rng.integers(3, 9)), replace=False)]
     victim_ids |= {v["id"] for v in vs}
     victims += vs
 
-    inbound: dict[str, list[tuple[datetime, float]]] = {m["id"]: [] for m in l1}
-    for v in vs:
-        days_paying = int(rng.integers(1, 3))
-        t = t0 + timedelta(minutes=float(rng.uniform(0, 90)))
-        for d in range(days_paying):
-            day_total, budget = 0.0, VICTIM_DAILY_CAP
-            for _ in range(int(rng.integers(1, 4))):
-                if budget < 5_000:
-                    break
-                style = rng.random()
-                if style < 0.45:
-                    amt = budget if budget <= P2P_CAP else P2P_CAP - int(rng.integers(1, 2_000))  # up to the cap
-                    amt = min(amt, budget)
-                elif style < 0.75:
-                    amt = min(budget, float(rng.choice([49_999, 50_000, 25_000, 99_000, 95_000])))
-                else:
-                    amt = min(budget, lognormal(40_000, 0.5, 5_000, P2P_CAP))
-                mule = l1[int(rng.integers(0, len(l1)))]
-                pay(v, mule, amt, t, "P2P", True, "L0→L1", cid)
-                inbound[mule["id"]].append((t, amt))
-                budget -= amt
-                day_total += amt
-                t += timedelta(minutes=float(rng.uniform(4, 45)))
-            t = t0 + timedelta(days=d + 1, minutes=float(rng.uniform(0, 240)))
+    if not shifted:
+        campaign_flows(cid, t0, l1, l2, vs, "base", 1.0)
+    else:
+        # Advance the shared stream exactly as base would, then drop those rows, so every later
+        # draw (the next campaign's mules and their camouflage, which reaches back to day 5) is
+        # unchanged. The variant's own flows draw from a stream of their own.
+        mark, ref0 = len(txns), ref[0]
+        campaign_flows(cid, t0, l1, l2, vs, "base", 1.0)
+        del txns[mark:]
+        ref[0] = ref0
+        main_rng, rng = rng, np.random.default_rng([SEED, c, 1])
+        if kind == "struct":  # 3x the victims; the extras stay out of victim_ids, which later draws read
+            taken = {v["id"] for v in vs}
+            extra = [p for p in pool if p["id"] not in taken]
+            more = [extra[i] for i in rng.choice(len(extra), 2 * len(vs), replace=False)]
+            victims += more
+            vs = vs + more
+        campaign_flows(cid, t0, l1, l2, vs, kind, scale)
+        rng = main_rng
 
-    # L1: forward most of each receipt, on its own schedule
-    for m in l1:
-        patient = rng.random() < 0.35  # waits hours rather than minutes
-        for t_in, amt_in in inbound[m["id"]]:
-            delay = rng.lognormal(math.log(150 if patient else 8), 0.6)  # minutes
-            t_out = t_in + timedelta(minutes=float(delay))
-            remaining = amt_in * rng.uniform(0.75, 0.97)
-            while remaining > 3_000:
-                amt = min(remaining, lognormal(30_000, 0.6, 5_000, P2P_CAP))
-                dst = l2[int(rng.integers(0, len(l2)))]
-                pay(m, dst, amt, t_out, "P2P", True, "L1→L2", cid)
-                remaining -= amt
-                t_out += timedelta(minutes=float(rng.uniform(0.5, 6)))
-    # L2: some forward again, a few hours later, to other accounts in the network
-    received: dict[str, float] = {}
-    for tx in txns:
-        if tx["campaign"] == cid and tx["layer"] == "L1→L2":
-            received[tx["recv_id"]] = received.get(tx["recv_id"], 0.0) + tx["amount_inr"]
-    for m in l2:
-        if m["id"] in received and rng.random() < 0.45 and len(l2) > 1:
-            t_out = t0 + timedelta(hours=float(rng.uniform(2, MAX_SPAN_HOURS - 2)))
-            remaining = received[m["id"]] * rng.uniform(0.5, 0.9)
-            while remaining > 3_000:
-                amt = min(remaining, lognormal(20_000, 0.6, 3_000, P2P_CAP))
-                dst = l2[int(rng.integers(0, len(l2)))]
-                if dst["id"] != m["id"]:
-                    pay(m, dst, amt, t_out, "P2P", True, "L2→L2", cid)
-                remaining -= amt
-                t_out += timedelta(minutes=float(rng.uniform(1, 20)))
     split = "train" if start < 6 else "val" if start < 8 else "test"
-    campaign_rows.append({"campaign": cid, "start": t0.isoformat(), "split": split, "victims": len(vs), "l1": len(l1), "l2": len(l2), "reusedL2": len(reuse[:4])})
+    campaign_rows.append({"campaign": cid, "start": t0.isoformat(), "split": split, "variant": kind, "victims": len(vs), "l1": len(l1), "l2": len(l2), "reusedL2": len(reuse[:4])})
 
 # ------------------------------------------------------------------ write
 
 txns.sort(key=lambda r: r["timestamp"])
-OUT.mkdir(exist_ok=True)
+OUT.mkdir(parents=True, exist_ok=True)
 fields = ["txn_id", "upi_ref", "sender_vpa", "sender_id", "recv_vpa", "recv_id", "amount_inr", "timestamp", "sender_state", "recv_state", "sender_bank", "recv_bank", "is_fraud", "layer", "channel", "campaign"]
 with open(OUT / "transactions.csv", "w", newline="", encoding="utf-8") as f:
     w = csv.DictWriter(f, fieldnames=fields)
@@ -282,6 +352,7 @@ with open(OUT / "labels.csv", "w", newline="", encoding="utf-8") as f:
 fraud = [t for t in txns if t["is_fraud"]]
 stats = {
     "version": "v2",
+    "variant": {"name": VARIANT, "scale": SCALE, "scope": ARGS.scope},
     "seed": SEED,
     "days": DAYS,
     "start": BASE.isoformat(),

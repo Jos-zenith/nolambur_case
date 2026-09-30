@@ -1616,7 +1616,7 @@ def evaluate_temporal(data: Dataset, model_threshold: float | None = None) -> di
         "analysts": analysts,
         "alertsPerAnalystPerDay": alerts_per_day / analysts,
         "leadSeconds": {"n": len(lead), "median": _pct(lead, 0.5), "p10": _pct(lead, 0.1), "p90": _pct(lead, 0.9),
-                        "alertedBeforeMoneyLeft": sum(1 for x in lead if x > 0), "note": "first time fraud money left a mule minus its first alert; negative = alerted after"},
+                        "alertedBeforeMoneyLeft": sum(1 for x in lead if x > 0), "mulesThatForwarded": len(first_out), "note": "first time fraud money left a mule minus its first alert; negative = alerted after"},
         "secondsToAlert": {"n": len(to_alert), "median": _pct(to_alert, 0.5), "p90": _pct(to_alert, 0.9), "note": "first fraud inflow to a mule until its first alert"},
         "ruleVersion": RULE_VERSION,
     }

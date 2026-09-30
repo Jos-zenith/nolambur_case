@@ -9,6 +9,7 @@ Every number here comes from a JSON file in this folder, written by the code tha
 | `loadtest.json`, `loadtest_cached.json` | `python -m infra.loadtest engine [--scoring cached]` |
 | `loadtest_http.json` | `python -m infra.loadtest http` |
 | `ablation_v2.json` | `python -m infra.ablation report` |
+| `stress_v2.json` | `python -m infra.stress report` |
 
 **The data is synthetic.** Nothing here is evidence about real payment traffic. The only such evidence would come from shadow mode on a partner's anonymised flows (see the end of this report).
 
@@ -147,6 +148,94 @@ At a realistic base rate most alerts would be false. The queue (0.17% of account
 - **Size the queue to analyst capacity.** Review the top k accounts a day, not everything above a threshold tuned at 0.35%. Pick the threshold again in shadow mode at the real base rate.
 - **Report precision per 1,000 alerts in shadow mode, not recall.** At these rates, precision decides whether analysts trust the queue.
 
+### 3.3 Stress tests: fast mules, structuring, low-value rings
+
+**Protocol, fixed on 2026-10-01 before any variant was scored.** Code: `infra/stress.py`. Results: `stress_v2.json`.
+
+**How the variants work.** Each variant rewrites only the two test-day campaigns (`nolambur_v2_gen.py --variant ... --scope test`). Days 0–7 are byte-identical to the base data. So the frozen production model, its training days and its validation threshold (0.86) are untouched. This measures what happens when the adversary changes behaviour after the model was built.
+
+The variants' campaigns draw from a new random stream, so `redraw` is the control: base behaviour on that same stream.
+
+| Variant | What changes in the test campaigns |
+|---|---|
+| `redraw` | Nothing (control) |
+| `fast` | Mules forward automatically: median 25 s after money arrives, about 85% within a minute, payments 2–20 s apart. Second-layer mules forward straight after their first receipt. |
+| `struct` | Structuring: 3× the victims, each paying a third as much a day, and every hop in ₹2,000–5,000 payments. Total money about the same. |
+| `low_0.5`, `low_0.2`, `low_0.1`, `low_0.05` | Low-value ring: every fraud amount, and the forwarding floors, multiplied by 0.5 / 0.2 / 0.1 / 0.05. The same draws, scaled. |
+
+**Metrics (test days only; all five are reported for every variant, whatever they show):**
+1. Recall: mules found by rules + model, out of mules active.
+2. Precision: mules out of accounts alerted by rules + model.
+3. Median lead time: first time fraud money left a mule, minus its first alert. Negative means too late.
+4. Share of mules alerted before any money left them, out of mules that forwarded fraud money.
+5. Fraud money stopped by graded holds, with the router acting alone.
+
+Secondary: rules-only recall and precision, and the model's recall and precision on fraud payments.
+
+**Retraining.** If the frozen model collapses on a variant (model recall on fraud payments below 40%, half its base 79%), that variant is also retrained. Retraining uses the same recipe (seed 42, 12 epochs) on data where every campaign has the new behaviour, then goes through the same measurement. Frozen answers "what happens when the adversary changes?"; retrained answers "is the pattern still learnable?". Both are reported.
+
+**Rules stay r2.0.** If a variant breaks them and a patch follows, it ships as a new rule version, reported with before and after numbers on every variant, including the extra false alerts on the base data.
+
+**Results (run 2026-10-01).** Every variant, with the five fixed metrics. Compare each variant with `redraw`, not with the base. The control alone moves recall from 77% to 58%, so two test campaigns are a small, noisy sample.
+
+| Variant | Model | Median fraud payment | Recall | Precision | Median lead | Alerted before money left | Money stopped |
+|---|---|---|---|---|---|---|---|
+| base | frozen | ₹22,559 | 77% (20/26) | 69% | 3.2 h | 10/13 | 17% |
+| **redraw (control)** | frozen | ₹24,680 | **58% (14/24)** | **58%** | **3.1 h** | **11/16** | **11%** |
+| fast | frozen | ₹25,544 | 61% (14/23) | 70% | **37 s** | 7/10 | 19% |
+| struct | frozen | ₹3,064 | 33% (11/33) | 55% | 7.0 h | 6/21 | 0% |
+| struct | retrained | ₹3,064 | 45% (20/44) | 71% | 14.3 h | 14/26 | 10% |
+| low ×0.5 | frozen | ₹12,340 | 38% (9/24) | 90% | 3.8 h | 8/16 | 0% |
+| low ×0.5 | retrained | ₹12,340 | 48% (14/29) | 64% | 3.1 h | 11/17 | 0% |
+| low ×0.2 | frozen | ₹4,936 | **0% (0/24)** | 0% (0/1) | n/a* | 4/16* | 0% |
+| low ×0.2 | retrained | ₹4,936 | 7% (2/29) | 14% | n/a* | 4/17* | 0% |
+| low ×0.1 | frozen | ₹2,468 | 0% (0/24) | 0% (0/1) | n/a* | 4/16* | 0% |
+| low ×0.1 | retrained | ₹2,468 | 3% (1/29) | 4% | n/a* | 3/17* | 0% |
+| low ×0.05 | frozen | ₹1,234 | 0% (0/24) | 0% (0/1) | n/a* | 4/16* | 0% |
+| low ×0.05 | retrained | ₹1,234 | 10% (3/29) | 1% (3 of 294) | n/a* | 5/17* | 0% |
+
+\* **Only reused mules count here.** The only mules "alerted before money left" in the low ×0.2 and smaller rows are mule accounts reused from an earlier campaign, flagged days earlier (median lead 5–8 days). The pre-registered lead metric counts alerts from any time, so they count, but nothing detected the test-day ring itself.
+
+**Why the retrained rows' counts differ.** Retrained rows use data where every campaign has the variant. Campaign 8's victims are still paying on day 8, so its variant-shaped payments spill into the test days (61 fraud payments rather than 57, and 29 active mules rather than 24).
+
+**How the model fared on fraud payments.** This is the collapse test; the threshold is picked on days 6–7.
+
+| Variant | Frozen | Retrained |
+|---|---|---|
+| fast | 33 of 46, 1 false | not needed |
+| struct | 0 of 608, 1 false | 340 of 621, 3 false |
+| low ×0.5 | 18 of 57, 1 false | 49 of 61, 8 false |
+| low ×0.2 | 0 of 57 | 7 of 61, 13 false |
+| low ×0.1 | 0 of 57 | 1 of 61, 28 false |
+| low ×0.05 | 0 of 57 | 15 of 61, **627 false** |
+
+**Fast mules.**
+- **Alerts still arrive in time, just.** The median alert comes 37 s before the mule moves the money, and 7 of 10 mules are flagged before any money leaves. That is too fast for an analyst.
+- **Holds still stopped money, but only from later instalments.** The router restricts only on corroborated evidence, and that comes after the first forward. What it stopped came from victims' second-day instalments, which hit an account already on hold, and from the mule's later forwards.
+- **19% vs 11% for the control is one ₹99,000 payment.** Read it as "about the same", not "better".
+- **So against automated mules, alerts can arrive in time but holds cannot stop the first transfer.** Only a hold at the moment of the alert could, and that would trade precision for speed.
+
+**Structuring (₹2,000–5,000 payments, same money).**
+- **The frozen model sees nothing:** 0 of 608 payments.
+- **The rules partly hold up.** Pass-through sums over windows, so it still flags 3 mules (all real). Hop-from-flagged adds 8 more.
+- **The rule meant for this finds nothing.** The detector named `structuring` looks for transfers just under the ₹1 lakh cap, so it has no answer to many small payments.
+- Recall falls from 58% (control) to 33%, and holds stop nothing.
+- **Once trained on it, the model learns it easily** (340 of 621 payments, 3 false). The retrained data has 5% fraud payments, 10× the others, which makes it easier to learn than it would be in reality.
+- **So the expectation that window sums would still catch structuring holds only in part:** they work, but the near-cap rule is blind.
+
+**Low-value rings: where detection breaks down.**
+- **The rules break first.** At ×0.5 (median fraud payment ₹12,340, largest ₹50,000) they find no mules at all. Pass-through needs ₹1 lakh through an account in a window, and new-payer inflow needs ₹1.5 lakh.
+- **At ×0.5 the GNN is the only thing that works.** Frozen, it finds 9 mules at 90% precision; retrained, 14.
+- **Holds still stop ₹0.** The router never restricts on a model-only alert, which is the policy recommended in 3.2, so this is the cost of that policy.
+- **At ×0.2 (median ₹4,936, largest ₹20,000) nothing detects the ring.** The frozen model finds nothing. Retraining doesn't rescue it: 7 of 61 payments with 13 false at ×0.2, and 15 of 61 with 627 false at ×0.05.
+- **At those sizes the fraud payments look like ordinary transfers.** Clean person-to-person payments here have a median of ₹1,283, and 14% are ₹5,000 or more.
+- **So a ring whose payments stay around ₹5,000 (none above ₹20,000) is invisible to everything in this system.** That is the plain failure.
+
+**What this changes.**
+1. **Pass-through floors are the rules' weak point.** The fix is floors relative to the account's own history ("5× its usual daily inflow"), not absolute rupee amounts. That would be rule r2.1, measured before and after on every variant, including the extra false alerts it causes on the base data. It has not been done.
+2. **The near-cap structuring rule should count many small payments too:** the number of distinct payers per window, not only amounts near ₹1 lakh.
+3. **Below about ₹5,000 a payment, payment data alone is not enough.** The signals that might still work come from outside the payment: many new accounts linked to one device or onboarding, I4C Suspect Registry hits, and victim reports feeding back quickly.
+
 ## 4. Throughput and latency
 
 **Hardware.** 12th Gen Intel Core i7-1255U, a 15 W laptop chip with 10 cores and 12 threads, 15.7 GB RAM, torch on CPU. A laptop, not a server: read these as a floor.
@@ -186,6 +275,7 @@ Payment latency is half a tick of batching (250 ms) plus the batch's processing 
 
 - **Synthetic data.** Clean payments are mostly small (median about ₹600) while scam transfers run ₹10,000 to ₹1 lakh, so amount still carries much of the signal: without it the model collapses (section 3.1). The rules were written by someone who knew how the generator works.
 - **The test set is small.** Two campaigns, 26 mules. The intervals above are wide for that reason.
+- **Small rings evade everything.** A ring paying around ₹5,000 a hop (none above ₹20,000) is invisible to both the rules and the model, even retrained (section 3.3).
 - **The base rate is high.** Fraud is 0.35% of test-day payments, about 500× the reported UPI rate. Precision would fall steeply (section 3.2).
 - **The graph is incomplete.** A payment aggregator sees only its own merchants' flows, while mule chains cross banks and PSPs. This engine sees one slice of the graph.
 
