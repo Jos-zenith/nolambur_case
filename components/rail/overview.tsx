@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 import { BackendGate, useWaitSeconds } from './BackendGate'
 import { GLOSSARY, Term, useCountUp, type TermKey } from './kit'
 import { MetricStrip } from './MetricStrip'
-import { NetworkGraph } from './NetworkGraph'
+import { MoneyTrails } from './MoneyTrails'
 import { ScamLab } from './ScamLab'
 
 /** The parts of /rail/evaluation (rail_engine.evaluate_temporal: test days only) this page shows. */
@@ -549,10 +549,11 @@ export function OverviewPage() {
       </section>
 
       <section className="grid gap-4">
-        <SectionTitle icon={Network} eyebrow="Follow the money" title="Who is paying whom, around every alert">
-          The accounts under alert and the money flowing in and out of them, redrawn as payments arrive. Click an account to open its alert.
+        <SectionTitle icon={Network} eyebrow="Follow the money" title="Where the money went, case by case">
+          Each row is one case. Read it left to right: who paid in, the account that received the money first, the accounts it passed it on to, and where it
+          left. Click an account to open its alert.
         </SectionTitle>
-        <NetworkGraph />
+        <MoneyTrails />
       </section>
 
       <section id="test-scam" className="grid scroll-mt-24 gap-4">
