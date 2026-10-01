@@ -471,6 +471,36 @@ No other parameter was added. The ₹6,100 comes from the train days of the base
 - All five metrics from 3.3, second-layer recall and the clean-traffic queue are reported for every arm.
 - Nothing is retuned after stream 3 is seen.
 
+**Result: r2.2 fails.** Run 2026-10-01; `rules_r22.json`. Two of the three criteria miss, both narrowly. As committed in advance, the hop rule stays as it is: r2.0 remains the default, and r2.1 and r2.2 stay opt-in. r2.2 is not retuned.
+
+| Criterion | Bar | r2.2 | Result |
+|---|---|---|---|
+| C1, struct4 second-layer recall | at least 78% (halfway from 64% to 92%) | 92% (23 of 25) | pass |
+| C1, low ×0.2 second-layer recall | at least 15.9% (halfway from 9.1% to 22.7%) | 13.6% (3 of 22) | **fail**, by one mule |
+| C2, clean-traffic queue | at most 10.0 false accounts a day | 10.1 (91 in 9 days) | **fail**, by one account |
+| C3, recall on the stream-3 redraw | at least r2.0's 79% | 79% | pass |
+
+**One disclosure about the run.** The first verdict run crashed after its replays and before writing or printing any result. The stress runner didn't pass the new per-role counts through (commit e003348). The fix changed no rule, parameter or criterion. The same stream-3 data was re-measured, not regenerated.
+
+**All arms on stream 3** (rules + model, frozen model, no friction):
+
+| Variant | Recall: r2.0 / r2.1 / r2.1 − hop / r2.2 | Precision: r2.0 / r2.1 / r2.1 − hop / r2.2 | Second-layer mules found, r2.2 |
+|---|---|---|---|
+| redraw | 79% / 79% / 75% / 79% | 81% / 54% / 88% / 88% | 16 of 22 |
+| fast | 79% / 79% / 75% / 79% | 81% / 61% / 88% / 88% | 16 of 22 |
+| struct | 33% / 97% / 79% / 97% | 52% / 47% / 93% / 94% | 24 of 25 |
+| struct4 | 71% / 94% / 71% / 94% | 65% / 45% / 92% / 94% | 23 of 25 |
+| low ×0.5 | 43% / 68% / 43% / 64% | 80% / 54% / 80% / 86% | 12 of 22 |
+| low ×0.2 | 4% / 25% / 14% / 18% | 50% / 39% / 67% / 71% | 3 of 22 |
+| low ×0.1 | 0% / 21% / 7% / 11% | — / 38% / 50% / 60% | 2 of 22 |
+| low ×0.05 | 0% / 4% / 4% / 4% | — / 10% / 33% / 33% | 1 of 22 |
+
+**What the failure leaves behind:**
+- **On structuring, r2.2 did what it was designed for.** On struct and struct4 it keeps r2.1's recall (97% and 94%) at 94% precision, against r2.1's 45–47%.
+- **It does not recover the small ring.** At ×0.2, second-layer coverage stays near the no-hop level. A likely reason, not separately measured: that ring's hops run around ₹4,000–6,000, near or under the ₹6,100 floor.
+- **The queue lands just over the bar.** It is 10.1 false accounts a day, against 18.0 for r2.1 and 8.3 for r2.1 − hop. Hop-from-flagged still accounts for 17 of the 91 false accounts.
+- **These observations are not a reason to adjust r2.2 and re-judge it.** Any r2.3 needs a new design written before a new stream (5 or later) is generated.
+
 ## 4. Throughput and latency
 
 **Hardware.** 12th Gen Intel Core i7-1255U, a 15 W laptop chip with 10 cores and 12 threads, 15.7 GB RAM, torch on CPU. A laptop, not a server: read these as a floor.
