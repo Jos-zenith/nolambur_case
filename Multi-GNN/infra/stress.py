@@ -141,7 +141,7 @@ def measure(raw: pd.DataFrame, labels: pd.DataFrame, scores: np.ndarray) -> dict
             "fraudDelayed": p.get("fraudDelayed"), "genuineDelayedThenReleased": p["genuineDelayedThenReleased"],
             "restrictions": p["restrictions"], "alertsPerDay": d["alertsPerDay"], "alertsPerAnalystPerDay": d["alertsPerAnalystPerDay"],
         },
-        "rules": d.get("ruleVersion"), "modelFriction": d.get("modelFriction"),
+        "rules": d.get("ruleVersion"), "modelFriction": d.get("modelFriction"), "byRole": d.get("byRole"),
         "threshold": ev["test"]["threshold"],
         "byDetector": d["byDetector"],
         "precisionCi": d["combined"]["precisionCi"], "recallCi": d["combined"]["recallCi"],
