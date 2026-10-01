@@ -12,6 +12,7 @@ Every number here comes from a JSON file in this folder, written by the code tha
 | `stress_v2.json` | `python -m infra.stress report` |
 | `rules_r21.json` | `python -m infra.stress rules` |
 | `rules_r21_nohop.json` | `python -m infra.stress nohop` |
+| `rules_r22.json` | `python -m infra.stress r22` |
 | `p2m_params_p1.0.json`, `p2m/*.json` | `python -m infra.p2m calibrate` / `evaluate` |
 
 **The data is synthetic.** Nothing here is evidence about real payment traffic. The only such evidence would come from shadow mode on a partner's anonymised flows (see the end of this report).
@@ -441,6 +442,34 @@ Streams 4 and 5 were added after stream 2 turned out to contain no ring. That de
 - **One "active" merchant in every draw is not fresh.** It is the validation campaign's collect scammer, still running on day 8 and identical across draws. The fresh evidence is 2–4 merchants per draw: the test sets are tiny, and the percentages above are counts of a handful.
 - **The projection to real fraud rates is not meaningful here.** The JSON's `falsePerRealAtReportedRate` (2,300–3,800) multiplies a merchant-level count by a payment-level factor. The usable cost figures are the ones above: false holds per 1,000 merchants a day, and D4 reviews as a share of onboardings.
 - **Company and director (MCA) linkage is not tested.** The registry stays empty; S3 is detected from the aggregator's own onboarding records only.
+
+### 3.6 Rules r2.2: a narrower hop rule, judged once on stream 3
+
+**Design, criteria and protocol, fixed and committed before stream 3 was generated.** Code: `RAIL_RULES=r2.2` in `rail_engine.py` and `python -m infra.stress r22`. Results: `rules_r22.json`.
+
+**The problem it targets (3.4).** r2.1's hop-from-flagged flagged everyone a mule paid, which is what tripled the queue. Without the hop rule, second-layer recall halved: on the 4-payer adversary it fell from 84% to 42%, and on the ×0.2 ring from 37% to 11%.
+
+**The design.** r2.2 is r2.1 except for the hop rule, which now fires only when all of these hold:
+- the recipient is an individual's account (shops, suppliers and businesses are skipped)
+- money from flagged senders in the last 24 h is at least ₹6,100, the 90th-percentile individual-to-individual payment on the train days
+- that flagged money is at least half of everything the account received in those 24 h
+
+No other parameter was added. The ₹6,100 comes from the train days of the base data. The 50% share is a design choice, not fitted to any variant.
+
+**Pass criteria. r2.2 passes only if all three hold:**
+- **C1, second-layer recall comes back.** On the stream-3 draws of `struct4` and `low ×0.2`, r2.2's recall on second-layer mules recovers at least halfway from r2.1 − hop to full r2.1, measured on that same draw.
+- **C2, the queue stays small.** On clean traffic (base data, days 1–9), r2.2 raises at most 10 false accounts a day. For comparison: r2.0 6.2, r2.1 − hop 8.3, r2.1 18.
+- **C3, no regression.** On the stream-3 redraw, r2.2's recall (rules + model) is at least r2.0's.
+
+**What happens either way:**
+- If r2.2 fails any criterion, that is published here and the hop rule stays as it is: r2.0 remains the default, and r2.1 and r2.2 stay opt-in.
+- If it passes, it becomes the recommended opt-in configuration. It still doesn't fix the base-rate problem in 3.2.
+
+**Protocol:**
+- Stream 3 is generated once, for every variant (`redraw`, `fast`, `struct`, `struct4`, `low ×0.5/0.2/0.1/0.05`), and scored with the frozen production model.
+- Four arms are compared, without friction: r2.0, r2.1, r2.1 − hop and r2.2.
+- All five metrics from 3.3, second-layer recall and the clean-traffic queue are reported for every arm.
+- Nothing is retuned after stream 3 is seen.
 
 ## 4. Throughput and latency
 

@@ -69,7 +69,7 @@ MAX_INBOX = 50_000
 DEMO_PREFIX = "test."  # account ids of the test scams sent from the overview page
 DEMO_COOLDOWN = 10.0  # seconds between new test scams, across all visitors
 DEMO_MAX = 200  # test scams per bridge process
-RULE_VERSIONS = ("r2.0", "r2.1")
+RULE_VERSIONS = ("r2.0", "r2.1", "r2.2")
 RULE_VERSION = os.getenv("RAIL_RULES", "r2.0")  # r2.1 is opt-in; see the R21_* constants
 if RULE_VERSION not in RULE_VERSIONS:
     raise ValueError(f"RAIL_RULES must be one of {RULE_VERSIONS}, not {RULE_VERSION!r}")
@@ -113,6 +113,11 @@ R21_PEER_BUSIEST = {"individual": 28_000, "supplier": 94_000}  # p95 of each kin
 R21_FANIN_PAYERS = 5  # distinct P2P payers new to an individual's account in 24 h; p99.9 on the train days is 3
 R21_FANIN_MIN_TOTAL = 5_000
 FRICTION_SCORE = 0.95  # RAIL_MODEL_FRICTION=1: a model-only alert this confident delays settlement (level 1)
+
+# r2.2 (RAIL_RULES=r2.2) = r2.1 with a narrower hop rule (reports/README.md 3.6, fixed before stream 3).
+# r2.1's hop-from-flagged flagged everyone a mule paid; without it, second-layer recall halved.
+R22_HOP_MIN = 6_100  # flagged inflow in 24 h: the p90 individual-to-individual P2P payment on the train days
+R22_HOP_SHARE = 0.5  # ...and at least half the account's inflow in those 24 h
 
 # Graded actions (the decision router picks a level; see RailEngine._route).
 LEVELS = {0: "alert_only", 1: "delay_settlement", 2: "hold_outbound", 3: "full_hold"}
@@ -490,7 +495,7 @@ class RailEngine:
 
         self._check_inflow_new_payers(r)
         self._check_structuring(r)
-        if self.rules == "r2.1":
+        if self.rules in ("r2.1", "r2.2"):
             self._check_fan_in(r)
         self._check_pass_through(r)
         if self.hop_rule:
@@ -636,7 +641,7 @@ class RailEngine:
         """r2.0: ₹1 lakh for everyone. r2.1: relative. An account with history needs 3x its own
         busiest day; a new one (cold start: no usable history) needs its peer group's p95 busiest
         day. Both at least the ₹25,000 floor."""
-        if self.rules != "r2.1":
+        if self.rules not in ("r2.1", "r2.2"):
             return PASS_FLOOR
         if active >= BASELINE_MIN_ACTIVE:
             return max(R21_PASS_FLOOR, R21_OWN_MULT * base_in)
@@ -682,9 +687,22 @@ class RailEngine:
             for a in self._alerts_on(account_id)
         )
 
+    def _hop_r22(self, r: Row) -> bool:
+        """r2.2: only an individual's account, and only when flagged money in the last 24 h is at
+        least ₹6,100 and at least half of everything it received in that time. Shops, suppliers and
+        businesses that a mule happens to pay are left alone."""
+        if self.data.kind.get(r.to_id, "individual") != "individual":
+            return False
+        recent = _window(self.inbound[r.to_id], r.t - 86400)
+        flagged = sum(x.amount for x in recent if self._is_hop_source(x.from_id, x.t))
+        total = sum(x.amount for x in recent)
+        return flagged >= R22_HOP_MIN and total > 0 and flagged / total >= R22_HOP_SHARE
+
     def _check_hop_from_flagged(self, r: Row) -> None:
         """Receives money from an account that a primary rule flagged in the last 24 hours."""
         if self._stopped(r.to_id) or not self._is_hop_source(r.from_id, r.t):
+            return
+        if self.rules == "r2.2" and not self._hop_r22(r):
             return
         hits = [x for x in self.inbound[r.to_id] if self._is_hop_source(x.from_id, x.t)]
         senders = {x.from_id for x in hits}
@@ -1684,6 +1702,8 @@ def evaluate_temporal(data: Dataset, model_threshold: float | None = None) -> di
         "leadSeconds": {"n": len(lead), "median": _pct(lead, 0.5), "p10": _pct(lead, 0.1), "p90": _pct(lead, 0.9),
                         "alertedBeforeMoneyLeft": sum(1 for x in lead if x > 0), "mulesThatForwarded": len(first_out), "note": "first time fraud money left a mule minus its first alert; negative = alerted after"},
         "secondsToAlert": {"n": len(to_alert), "median": _pct(to_alert, 0.5), "p90": _pct(to_alert, 0.9), "note": "first fraud inflow to a mule until its first alert"},
+        "byRole": {role: {"active": sum(1 for m in mules if data.role.get(m) == role),
+                          "found": sum(1 for m in (rule_accounts | model_accounts) & mules if data.role.get(m) == role)} for role in mule_roles},
         "ruleVersion": offline.rules,
         "modelFriction": offline.model_friction,
         "hopFromFlagged": offline.hop_rule,

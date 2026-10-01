@@ -108,3 +108,25 @@ def test_hop_rule_can_be_switched_off(monkeypatch):
     assert "hop_from_flagged" in detectors(stream().engine(), "next")
     monkeypatch.setenv("RAIL_HOP_FROM_FLAGGED", "0")
     assert "hop_from_flagged" not in detectors(stream().engine(), "next")
+
+
+def test_r22_hop_skips_shops_and_small_shares(monkeypatch):
+    """r2.2: the next hop is alerted for an individual whose inflow is mostly flagged money, not for
+    a shop the mule pays, and not for a person getting a small share from it."""
+    def stream() -> Stream:
+        s = Stream()
+        for i in range(5):
+            s.pay(f"victim{i}", "mule", 99_999, T0 + timedelta(minutes=35 * i), fraud=1)
+        s.pay("mule", "next", 90_000, T0 + timedelta(hours=4), fraud=1)
+        s.pay("mule", "shop", 9_000, T0 + timedelta(hours=4, minutes=5), channel="P2M")
+        for i in range(6):  # a busy person: ₹60,000 from friends, then ₹7,000 from the mule
+            s.pay(f"friend{i}", "busy", 10_000, T0 + timedelta(hours=1, minutes=10 * i))
+        s.pay("mule", "busy", 7_000, T0 + timedelta(hours=4, minutes=10))
+        s.kinds["shop"] = "merchant"
+        return s
+    monkeypatch.setenv("RAIL_RULES", "r2.1")
+    eng = stream().engine()
+    assert {"next", "shop", "busy"} <= {a.account_id for a in eng.alerts.values() if a.detector == "hop_from_flagged"}
+    monkeypatch.setenv("RAIL_RULES", "r2.2")
+    eng = stream().engine()
+    assert {a.account_id for a in eng.alerts.values() if a.detector == "hop_from_flagged"} == {"next"}

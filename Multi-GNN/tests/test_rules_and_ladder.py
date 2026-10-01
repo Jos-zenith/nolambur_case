@@ -26,6 +26,7 @@ class Stream:
         self.rows: list[dict] = []
         self.scores: list[float] = []
         self.roles: dict[str, str] = {}
+        self.kinds: dict[str, str] = {}  # optional account types (merchant, business...); unset = individual
 
     def pay(self, src: str, dst: str, amount: float, at: datetime, *, fraud: int = 0, score: float = 0.01, channel: str = "P2P", src_state: str = "Tamil Nadu", dst_state: str = "Rajasthan") -> None:
         self.rows.append({
@@ -39,7 +40,7 @@ class Stream:
 
     def engine(self, *, auto_hold: bool = False, threshold: float = 0.9) -> RailEngine:
         raw = pd.DataFrame(self.rows)
-        labels = pd.DataFrame([{"account_id": a, "role": r, "bank": "SBI"} for a, r in self.roles.items()])
+        labels = pd.DataFrame([{"account_id": a, "role": r, "bank": "SBI", "kind": self.kinds.get(a, "individual")} for a, r in self.roles.items()])
         data = Dataset(raw, np.array(self.scores), labels, {"version": "test"})
         eng = RailEngine(data, record_actions=False, auto_hold=auto_hold, model_threshold=threshold)
         eng.run_to_end()

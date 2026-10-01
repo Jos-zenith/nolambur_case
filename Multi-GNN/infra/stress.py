@@ -46,6 +46,14 @@ REPORT = ROOT / "reports" / "stress_v2.json"
 RULES_REPORT = ROOT / "reports" / "rules_r21.json"
 RULE_ARMS = (("r2.0", False), ("r2.1", False), ("r2.1", True))  # (RAIL_RULES, model friction)
 NOHOP_REPORT = ROOT / "reports" / "rules_r21_nohop.json"
+R22_REPORT = ROOT / "reports" / "rules_r22.json"
+# Fixed before stream 3 was generated (reports/README.md 3.6). r2.2 passes only if all three hold.
+R22_CRITERIA = {
+    "C1": "second-layer recall under r2.2 recovers at least halfway from r2.1 - hop to r2.1, on struct4 and on low x0.2 (stream 3)",
+    "C2": "clean-traffic queue under r2.2 is at most 10 false accounts a day (base data, days 1-9)",
+    "C3": "rules + model recall under r2.2 is at least r2.0's on the stream-3 redraw",
+}
+R22_QUEUE_MAX = 10.0
 REPORTED_FACTOR = 514.0  # reported UPI fraud is ~514x rarer than the test-day payments (ablation_v2.json)
 SPLIT_DAYS = {"train": [0, 6], "val": [6, 8], "test": [8, 10]}
 
@@ -298,9 +306,52 @@ def nohop_report() -> dict[str, Any]:
     return out
 
 
+def r22_report() -> dict[str, Any]:
+    """reports/README.md 3.6: r2.0, r2.1, r2.1 - hop and r2.2 on every variant's stream-3 draw (generated once,
+    after the design and these criteria were committed), plus r2.2's clean-traffic cost; then the verdict."""
+    arms = (("r2.0", True), ("r2.1", True), ("r2.1", False), ("r2.2", True))
+    rows: dict[str, Any] = {}
+    for name in VARIANTS:
+        path = scores_path(name, "frozen", "test", 3)
+        d = variant_dir(name, "test", 3)
+        raw, labels = pd.read_csv(d / "transactions.csv"), pd.read_csv(d / "labels.csv")
+        scores = np.load(path)
+        for rules, hop in arms:
+            arm = rules + ("" if hop else " - hop")
+            print(f"measuring {name} (stream 3) with {arm} ...", flush=True)
+            _with_rules(rules, False, hop)
+            m = measure(raw, labels, scores)
+            rows[f"{name}/{arm}"] = {"variant": name, "arm": arm, "fraud": fraud_profile(raw), **m}
+    cost = clean_cost("r2.2")
+    _with_rules("r2.0", False)
+
+    def l2(key: str) -> float | None:
+        r = rows[key]["byRole"]["l2_mule"]
+        return r["found"] / r["active"] if r["active"] else None
+
+    c1 = {}
+    for v in ("struct4", "low_0.2"):
+        full, nohop, new = l2(f"{v}/r2.1"), l2(f"{v}/r2.1 - hop"), l2(f"{v}/r2.2")
+        bar = (full + nohop) / 2
+        c1[v] = {"r2.1": full, "r2.1 - hop": nohop, "r2.2": new, "bar": bar, "pass": new is not None and new >= bar - 1e-9}
+    c2 = {"r2.2 falsePerDay": cost["falsePerDay"], "max": R22_QUEUE_MAX, "pass": cost["falsePerDay"] <= R22_QUEUE_MAX}
+    c3 = {"r2.0": rows["redraw/r2.0"]["recall"], "r2.2": rows["redraw/r2.2"]["recall"], "pass": rows["redraw/r2.2"]["recall"] >= rows["redraw/r2.0"]["recall"] - 1e-9}
+    verdict = {"C1": c1, "C2": c2, "C3": c3, "pass": all(x["pass"] for x in c1.values()) and c2["pass"] and c3["pass"]}
+    out = {
+        "createdAt": datetime.now().isoformat(timespec="seconds"),
+        "protocol": "reports/README.md 3.6; stream 3 generated once, after the design and criteria were committed; frozen model, no friction",
+        "criteria": R22_CRITERIA,
+        "verdict": verdict,
+        "cleanCost": cost,
+        "rows": rows,
+    }
+    R22_REPORT.write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")
+    return out
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("cmd", choices=["gen", "score", "report", "rules", "nohop"])
+    parser.add_argument("cmd", choices=["gen", "score", "report", "rules", "nohop", "r22"])
     parser.add_argument("--stream", type=int, default=1, help="gen/score: 1 = the original draws, 2+ = fresh ones")
     parser.add_argument("--variant", nargs="*", default=list(VARIANTS))
     parser.add_argument("--scope", choices=["test", "all"], default="test")
@@ -315,6 +366,9 @@ def main(argv: list[str] | None = None) -> None:
     elif args.cmd == "rules":
         out = rules_report()
         print(json.dumps(out["cleanCost"], indent=2))
+    elif args.cmd == "r22":
+        out = r22_report()
+        print(json.dumps(out["verdict"], indent=2))
     elif args.cmd == "nohop":
         out = nohop_report()
         print(json.dumps(out["cleanCost"], indent=2))
