@@ -25,7 +25,7 @@ By the time Tamil Nadu Cyber Cell could coordinate freeze requests across state 
 
 ## What I Built
 
-A two-stage ML pipeline + real-time dashboard that detects mule chains before the money moves.
+A risk engine for UPI mule networks: rules, a graph model and graded holds that stop a scam campaign's later instalments and onward transfers, plus merchant-side rules for a payment aggregator. Measured on synthetic data; see `Multi-GNN/reports/README.md` for ranges and limits.
 
 ```
 Victim transfer → T-GNN flags L1 mule (< 1s) → Predicts L2 accounts → Pre-freeze signal
