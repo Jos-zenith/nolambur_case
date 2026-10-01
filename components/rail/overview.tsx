@@ -489,11 +489,13 @@ function Disclosure({ title, hint, children }: { title: string; hint: string; ch
 
 // ---------------------------------------------------------------------------- the page
 
+const P2M_PART = 'Merchant-side rules (P2M)'
+
 const STATUS = [
   { part: 'Transactions', state: 'Working', note: 'Live by default: payments arrive on the webhook, a Kafka topic or a Kinesis stream and are scored online. Offsets and checkpoints are committed only after the engine has processed a batch; bad messages go to a dead-letter table. Tested against a real Kafka broker and a Kinesis emulator, not production AWS. This public demo runs RAIL_SOURCE=replay over the synthetic dataset.' },
   { part: 'GNN score on every payment', state: 'Working', note: 'Each payment is scored on its own 2-hop subgraph, using only earlier payments (infra/scorer.py). Verified equal to a full-graph pass to 1e-20; a cached mode trades exactness for speed.' },
   { part: 'Detectors, queue, lead time', state: 'Working', note: 'Rules r2.0 sum over 1 h to 72 h windows with per-account baselines, because UPI caps a transfer at ₹1 lakh. r2.1 (relative floors, a new-payers count, friction) is opt-in: it catches structured rings but triples the queue. Stress tests and fresh redraws are in the evidence report.' },
-  { part: 'Merchant-side rules (P2M)', state: 'Working, replay', note: 'Ticket anomaly, payer spread, collect-request pattern and shared settlement accounts, with settlement holds, on the aggregator’s own view. The bridge replays a fresh synthetic draw at start-up and the Merchants page shows it, with an onboarding check; it does not take live merchant traffic yet.' },
+  { part: P2M_PART, state: 'Working, offline', note: 'Ticket anomaly, payer spread, collect-request pattern and shared settlement accounts, with settlement holds, on the aggregator’s own view. Judged on fresh synthetic draws in a replay (Multi-GNN/reports/README.md 3.5).' },
   { part: 'Precision and recall', state: 'Working', note: 'Train on days 0–5, threshold from days 6–7, report days 8–9 only, with 95% intervals, precision@k and alerts per analyst. Synthetic data: shadow mode on real flows is the test that is still missing.' },
   { part: 'Agent investigation', state: 'Working', note: 'Re-scores the alert\u2019s transfers on the current graph; the NPCI registry lookup is an HTTP call to a sandbox mock whose answer comes from the label.' },
   { part: 'Graded actions and appeals', state: 'Working', note: 'A router maps rule and model evidence to alert only, delay settlement, hold outbound or full hold. Every restriction lifts after a time limit unless confirmed; appeals are recorded and must be decided in 24 h.' },
@@ -508,7 +510,24 @@ const JOURNEY = [
   { icon: Briefcase, title: 'Incident response', href: '/cases', body: 'Linked accounts group into cases, with an evidence pack and a 1930 report.' },
 ]
 
+/** The P2M line says "replay" only while the bridge actually serves /rail/p2m (Merchants page); otherwise "offline". */
+function useStatusItems() {
+  const [p2mReady, setP2mReady] = useState(false)
+  useEffect(() => {
+    fetch('/api/rail/p2m/status', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setP2mReady(d?.status === 'ready'))
+      .catch(() => {})
+  }, [])
+  return STATUS.map(s =>
+    s.part === P2M_PART && p2mReady
+      ? { ...s, state: 'Working, replay', note: `${s.note} The bridge replays it at start-up and the Merchants page shows it, with an onboarding check; it does not take live merchant traffic yet.` }
+      : s,
+  )
+}
+
 export function OverviewPage() {
+  const status = useStatusItems()
   return (
     <div className="grid gap-14">
       <Hero />
@@ -573,8 +592,8 @@ export function OverviewPage() {
         <Disclosure title="Where the data comes from, and what the numbers can and cannot claim" hint="Synthetic data · still easier than real traffic">
           <DataHonesty bare />
         </Disclosure>
-        <Disclosure title="What is real, what is sandboxed, what is not built" hint={`${STATUS.filter(s => s.state.startsWith('Working')).length} of ${STATUS.length} parts working`}>
-          <RealityGrid items={STATUS} bare />
+        <Disclosure title="What is real, what is sandboxed, what is not built" hint={`${status.filter(s => s.state.startsWith('Working')).length} of ${status.length} parts working`}>
+          <RealityGrid items={status} bare />
         </Disclosure>
         <Disclosure title="The vocabulary" hint="Mule, lead time, hold, 1930 and more">
           <GlossaryGrid bare />

@@ -95,8 +95,11 @@ function useP2M<T>(path: string, enabled = true) {
   return data
 }
 
+type Snapshot = { capturedAt: string; status: Status; merchants: Merchant[]; details: Record<string, Detail>; evaluation: Evaluation }
+
 export default function MerchantsPage() {
   const [status, setStatus] = useState<Status | null>(null)
+  const [snap, setSnap] = useState<Snapshot | null>(null)
   const poll = useCallback(() => {
     fetch('/api/rail/p2m/status', { cache: 'no-store' })
       // a 404 from a reachable bridge means it predates the merchant replay
@@ -109,9 +112,20 @@ export default function MerchantsPage() {
     const id = setInterval(() => status?.status !== 'ready' && poll(), 4000)
     return () => clearInterval(id)
   }, [poll, status?.status])
+  // the same replay, saved (python -m infra.p2m_service), shown whenever the bridge can't serve it
+  useEffect(() => {
+    fetch('/p2m-snapshot.json')
+      .then(r => (r.ok ? r.json() : null))
+      .then(setSnap)
+      .catch(() => {})
+  }, [])
   const ready = status?.status === 'ready'
-  const merchants = useP2M<Merchant[]>('merchants', ready)
-  const evaluation = useP2M<Evaluation>('evaluation', ready)
+  const liveMerchants = useP2M<Merchant[]>('merchants', ready)
+  const liveEvaluation = useP2M<Evaluation>('evaluation', ready)
+  const live = ready && !!liveMerchants
+  const merchants = live ? liveMerchants : (snap?.merchants ?? null)
+  const evaluation = live ? liveEvaluation : (snap?.evaluation ?? null)
+  const shownStatus = live ? status : (snap?.status ?? status)
   const [selected, setSelected] = useState<string | null>(null)
   const [onlyFlagged, setOnlyFlagged] = useState(true)
   const shown = useMemo(() => (merchants ?? []).filter(m => !onlyFlagged || m.detectors.length > 0), [merchants, onlyFlagged])
@@ -123,7 +137,7 @@ export default function MerchantsPage() {
     <div className="grid gap-6">
       <PageHeader
         icon={Store}
-        eyebrow={`The aggregator's own view · rules ${status?.rules ?? 'p1.0'}`}
+        eyebrow={`The aggregator's own view · rules ${shownStatus?.rules ?? 'p1.0'}`}
         title="Merchant risk"
         guideKey="merchants"
         guide={[
@@ -136,33 +150,16 @@ export default function MerchantsPage() {
         3.5). It is not a live stream. Labels are shown so the replay can be checked; no rule reads them.
       </PageHeader>
 
-      {!ready ? (
-        <div className="rounded-lg border bg-card p-5 text-[13.5px] shadow-card">
-          {status?.status === 'error' ? (
-            <p className="text-sev-critical">The P2M replay failed: {status.error}</p>
-          ) : status?.status === 'disabled' ? (
-            <p>The P2M replay is turned off on this bridge (RAIL_P2M=0).</p>
-          ) : status?.status === 'absent' ? (
-            <p>The running bridge predates the merchant replay. Redeploy it from the latest commit to see this page.</p>
-          ) : (
-            <p className="flex items-center gap-2 text-muted-foreground">
-              <CircleDashed className="size-4 animate-spin" />
-              {!status
-                ? 'Waiting for the GNN bridge…'
-                : status.status === 'waiting'
-                  ? 'The bridge is loading the payment engine first; the merchant replay starts after it…'
-                  : 'Replaying the merchant data on the bridge (under a minute)…'}
-            </p>
-          )}
-        </div>
-      ) : (
+      {!live && <BridgeNote status={status} snapshotAt={snap?.capturedAt ?? null} />}
+
+      {merchants && (
         <>
-          <Evidence status={status} evaluation={evaluation} />
+          <Evidence status={shownStatus} evaluation={evaluation} />
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
             <section className="rounded-lg border bg-card shadow-card">
               <div className="flex items-center justify-between border-b px-4 py-2.5 text-[13px]">
                 <span className="font-medium">
-                  {shown.length} of {merchants?.length ?? '…'} merchants
+                  {shown.length} of {merchants.length} merchants
                 </span>
                 <label className="flex items-center gap-1.5 text-muted-foreground">
                   <input type="checkbox" checked={onlyFlagged} onChange={e => setOnlyFlagged(e.target.checked)} /> flagged only
@@ -198,12 +195,41 @@ export default function MerchantsPage() {
                 ))}
               </ul>
             </section>
-            {selected && <MerchantDetail id={selected} detectors={status?.detectors ?? {}} />}
+            {selected && <MerchantDetail id={selected} detectors={shownStatus?.detectors ?? {}} preset={live ? undefined : (snap?.details[selected] ?? null)} />}
           </div>
-          <OnboardingCheck />
+          <OnboardingCheck live={live} />
         </>
       )}
     </div>
+  )
+}
+
+/** Why the page isn't live, and that what's below (if anything) is the saved copy of the same replay. */
+function BridgeNote({ status, snapshotAt }: { status: Status | null; snapshotAt: string | null }) {
+  const why =
+    status?.status === 'error'
+      ? `The merchant replay failed on the bridge: ${status.error}.`
+      : status?.status === 'disabled'
+        ? 'The merchant replay is turned off on this bridge (RAIL_P2M=0).'
+        : status?.status === 'absent'
+          ? 'The running bridge predates the merchant replay.'
+          : !status
+            ? 'The bridge is not answering yet (it sleeps on the free plan).'
+            : status.status === 'waiting'
+              ? 'The bridge is loading the payment engine first; the merchant replay starts after it.'
+              : status.status === 'ready'
+                ? 'Loading the merchant replay from the bridge.'
+                : 'The bridge is replaying the merchant data (under a minute).'
+  return (
+    <p className="flex items-start gap-2 rounded-md border border-sev-medium/30 bg-sev-medium-bg/60 px-3 py-2 text-[13px] leading-relaxed">
+      <CircleDashed className="mt-0.5 size-4 shrink-0 animate-spin text-sev-medium" />
+      <span>
+        {why}{' '}
+        {snapshotAt
+          ? `Showing a snapshot of the same replay, captured ${snapshotAt.replace('T', ' ')} by python -m infra.p2m_service; detail for flagged merchants only, and the onboarding check needs the live bridge.`
+          : 'No snapshot is available.'}
+      </span>
+    </p>
   )
 }
 
@@ -258,8 +284,10 @@ function Evidence({ status, evaluation }: { status: Status | null; evaluation: E
   )
 }
 
-function MerchantDetail({ id, detectors }: { id: string; detectors: Record<string, string> }) {
-  const d = useP2M<Detail>(`merchants/${id}`)
+function MerchantDetail({ id, detectors, preset }: { id: string; detectors: Record<string, string>; preset?: Detail | null }) {
+  const fetched = useP2M<Detail>(`merchants/${id}`, preset === undefined)
+  const d = preset === undefined ? fetched : preset
+  if (preset === null) return <section className="rounded-lg border bg-card p-4 text-[13px] text-muted-foreground shadow-card">The snapshot keeps detail for flagged merchants only.</section>
   if (!d || d.id !== id) return <section className="h-[420px] animate-pulse rounded-lg border bg-card" />
   const collects = (o: Record<string, number>) => Object.entries(o).map(([k, n]) => `${n} ${k}`).join(' · ') || 'none'
   return (
@@ -358,7 +386,7 @@ function MerchantDetail({ id, detectors }: { id: string; detectors: Record<strin
   )
 }
 
-function OnboardingCheck() {
+function OnboardingCheck({ live }: { live: boolean }) {
   const [account, setAccount] = useState('')
   const [entity, setEntity] = useState('')
   const [result, setResult] = useState<Onboarding | null>(null)
@@ -380,7 +408,7 @@ function OnboardingCheck() {
       <div className="flex flex-wrap gap-2">
         <input value={account} onChange={e => setAccount(e.target.value)} placeholder="Settlement account, e.g. SA0a0e244757" className="h-9 w-72 rounded-md border bg-background px-2.5 font-mono text-[13px]" />
         <input value={entity} onChange={e => setEntity(e.target.value)} placeholder="Declared legal entity" className="h-9 w-56 rounded-md border bg-background px-2.5 text-[13px]" />
-        <button onClick={check} disabled={account.length < 3 || !entity} className="h-9 rounded-md bg-brand-1 px-4 text-[13px] font-medium text-white disabled:opacity-50">
+        <button onClick={check} disabled={!live || account.length < 3 || !entity} title={live ? undefined : 'Needs the live bridge'} className="h-9 rounded-md bg-brand-1 px-4 text-[13px] font-medium text-white disabled:opacity-50">
           Check
         </button>
       </div>

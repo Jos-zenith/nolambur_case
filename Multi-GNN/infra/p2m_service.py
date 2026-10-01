@@ -235,3 +235,28 @@ def mount(app: FastAPI, wait_for: Any = None) -> P2MService:
     else:
         svc.status = "disabled"
     return svc
+
+
+def snapshot(out: Path, recent: int = 40) -> dict[str, Any]:
+    """The same views the endpoints serve, saved for the console to show while the bridge can't
+    (asleep, warming, or a deploy that predates the replay). Flagged merchants get their detail."""
+    svc = P2MService()
+    svc._load()
+    if svc.status != "ready":
+        raise RuntimeError(svc.error or svc.status)
+    merchants = svc.merchants()
+    details = {}
+    for m in merchants:
+        if m["detectors"]:
+            d = svc.merchant(m["id"])
+            d["recentPayments"] = d["recentPayments"][:recent]
+            details[m["id"]] = d
+    snap = {"capturedAt": datetime.now().isoformat(timespec="seconds"), "status": svc.facts(), "merchants": merchants,
+            "details": details, "evaluation": svc.evaluation_view()}
+    out.write_text(json.dumps(snap, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
+    return {"merchants": len(merchants), "details": len(details), "bytes": out.stat().st_size}
+
+
+if __name__ == "__main__":
+    # python -m infra.p2m_service ../public/p2m-snapshot.json
+    print(snapshot(Path(sys.argv[1] if len(sys.argv) > 1 else ROOT.parent / "public" / "p2m-snapshot.json")))

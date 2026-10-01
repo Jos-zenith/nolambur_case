@@ -471,7 +471,9 @@ No other parameter was added. The ₹6,100 comes from the train days of the base
 - All five metrics from 3.3, second-layer recall and the clean-traffic queue are reported for every arm.
 - Nothing is retuned after stream 3 is seen.
 
-**Result: r2.2 fails.** Run 2026-10-01; `rules_r22.json`. Two of the three criteria miss, both narrowly. As committed in advance, the hop rule stays as it is: r2.0 remains the default, and r2.1 and r2.2 stay opt-in. r2.2 is not retuned.
+**Result: r2.2 fails its pre-registered criteria.** Run 2026-10-01; `rules_r22.json`. Two of the three criteria miss, each by a single unit (one mule, one false account) on samples this small. That is inside the noise, so the right reading is **"not demonstrated", not "r2.2 is worse"**. As committed in advance, the hop rule stays as it is: r2.0 remains the default, and r2.1 and r2.2 stay opt-in. r2.2 is not retuned, and stream 3 is spent: it will not be used to judge anything again.
+
+**Summary:** r2.2 keeps r2.1's structuring recall at far better precision (94% against r2.1's 45–47%), but it did not clear the bar on the small ring or the queue. Rule work stops here; the ×0.2 ring stays a stated limit (section 5).
 
 | Criterion | Bar | r2.2 | Result |
 |---|---|---|---|
@@ -497,7 +499,10 @@ No other parameter was added. The ₹6,100 comes from the train days of the base
 
 **What the failure leaves behind:**
 - **On structuring, r2.2 did what it was designed for.** On struct and struct4 it keeps r2.1's recall (97% and 94%) at 94% precision, against r2.1's 45–47%.
-- **It does not recover the small ring.** At ×0.2, second-layer coverage stays near the no-hop level. A likely reason, not separately measured: that ring's hops run around ₹4,000–6,000, near or under the ₹6,100 floor.
+- **It does not recover the small ring.** At ×0.2, second-layer coverage stays near the no-hop level.
+  - **The ₹6,100 floor is probably not the reason.** A post-hoc diagnostic, run on streams 1 and 2 of the ×0.2 ring (never stream 3) after the result, looked at each second-layer mule's largest 24-hour fraud inflow and its share of that window's inflow. On amounts alone, 11 of 18 and 13 of 21 second-layer mules clear both the ₹6,100 floor and the 50% share.
+  - **The likelier limit is upstream.** Hop-from-flagged needs a flagged sender, and at ×0.2 the rules flag only 2 of 6 first-layer mules (stream 3, every rules version). There is little to hop from.
+  - This explains the miss; it does not fix it.
 - **The queue lands just over the bar.** It is 10.1 false accounts a day, against 18.0 for r2.1 and 8.3 for r2.1 − hop. Hop-from-flagged still accounts for 17 of the 91 false accounts.
 - **These observations are not a reason to adjust r2.2 and re-judge it.** Any r2.3 needs a new design written before a new stream (5 or later) is generated.
 
