@@ -645,6 +645,10 @@ import rail_engine  # noqa: E402  (needs the app and helpers above)
 
 RAIL = rail_engine.mount(app, _rail_load, _rail_predict_chain)
 
+from infra import p2m_service  # noqa: E402
+
+P2M = p2m_service.mount(app, wait_for=lambda: RAIL.status in ("ready", "error"))  # merchant-side replay, after the P2P engine (RAIL_P2M=0: off)
+
 
 if __name__ == "__main__":
     import uvicorn

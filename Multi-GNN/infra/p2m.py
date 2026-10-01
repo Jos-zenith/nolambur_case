@@ -85,6 +85,7 @@ class Engine:
         self.onboarded: dict[str, float] = {}
         self.by_sa: dict[str, list] = defaultdict(list)
         self.daystats: dict[tuple, dict] = defaultdict(lambda: {"firstAbove": 0, "states": set(), "colNew": 0, "colFail": 0})
+        self.batch_log: list[dict[str, Any]] = []  # one row per merchant per batch with money due: held or settled
 
     # ------------------------------------------------------------------ events
 
@@ -195,7 +196,12 @@ class Engine:
             due = [i for i in rows if _ts(pays.at[i, "timestamp"]) < cutoff]
             if not due:
                 continue
-            if self.hold_until.get(mid, 0) > t:
+            amount = float(sum(pays.at[i, "amount_inr"] for i in due))
+            fraud = float(sum(pays.at[i, "amount_inr"] for i in due if pays.at[i, "is_fraud"]))
+            held = self.hold_until.get(mid, 0) > t
+            self.batch_log.append({"merchant": mid, "t": t, "payments": len(due), "amount": amount, "fraudAmount": fraud, "held": held,
+                                   "holdUntil": self.hold_until.get(mid) if held else None})
+            if held:
                 self.held_rows.update(due)
                 continue
             for i in due:
@@ -247,10 +253,10 @@ def calibrate(data: Data) -> dict[str, Any]:
 # ---------------------------------------------------------------------- evaluation
 
 
-def evaluate(data: Data, params: dict[str, Any], label: str) -> dict[str, Any]:
+def evaluate(data: Data, params: dict[str, Any], label: str, eng: Engine | None = None) -> dict[str, Any]:
     _CAT_P99.clear()
     _CAT_P99.update(params["catP99"])
-    eng = Engine(data, params).run()
+    eng = eng or Engine(data, params).run()
     s0 = data.start
     t0, t1 = s0 + TEST[0] * DAY, s0 + TEST[1] * DAY
     pays, cols = data.payments, data.collects

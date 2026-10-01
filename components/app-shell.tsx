@@ -1,6 +1,6 @@
 'use client'
 
-import { Briefcase, Brain, LayoutDashboard, ListChecks, ScanSearch, Server, ShieldHalf } from 'lucide-react'
+import { Briefcase, Brain, LayoutDashboard, ListChecks, ScanSearch, Server, ShieldHalf, Store } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -14,6 +14,7 @@ const NAV = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/console', label: 'Alert queue', icon: ListChecks, badge: 'alerts' as const },
   { href: '/onboarding', label: 'Onboarding', icon: ScanSearch },
+  { href: '/merchants', label: 'Merchants', icon: Store },
   { href: '/cases', label: 'Cases', icon: Briefcase },
   { href: '/model', label: 'Model', icon: Brain },
   { href: '/platform', label: 'Platform', icon: Server },

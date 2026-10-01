@@ -1,0 +1,140 @@
+{
+  "seed": 11,
+  "stream": 2,
+  "scale": 1.0,
+  "days": 10,
+  "start": "2024-03-11T00:00:00",
+  "merchants": 423,
+  "fraudMerchants": 23,
+  "payments": 57883,
+  "fraudPayments": 507,
+  "collects": 7090,
+  "fraudCollects": 2448,
+  "campaigns": [
+    {
+      "campaign": "P01",
+      "start": "2024-03-11T10:48:00",
+      "split": "train",
+      "ring": false,
+      "actives": [
+        "S1:electronics"
+      ],
+      "fronts": 0,
+      "s1Payments": 45,
+      "s2Requests": 0
+    },
+    {
+      "campaign": "P02",
+      "start": "2024-03-12T09:36:00",
+      "split": "train",
+      "ring": false,
+      "actives": [
+        "S1:kirana",
+        "S1:restaurant"
+      ],
+      "fronts": 0,
+      "s1Payments": 50,
+      "s2Requests": 0
+    },
+    {
+      "campaign": "P03",
+      "start": "2024-03-13T12:00:00",
+      "split": "train",
+      "ring": false,
+      "actives": [
+        "S1:pharmacy",
+        "S1:online_services"
+      ],
+      "fronts": 0,
+      "s1Payments": 59,
+      "s2Requests": 0
+    },
+    {
+      "campaign": "P04",
+      "start": "2024-03-14T08:24:00",
+      "split": "train",
+      "ring": true,
+      "actives": [
+        "S2+S3:subscription"
+      ],
+      "fronts": 3,
+      "s1Payments": 0,
+      "s2Requests": 498
+    },
+    {
+      "campaign": "P05",
+      "start": "2024-03-15T02:24:00",
+      "split": "train",
+      "ring": true,
+      "actives": [
+        "S1+S3:pharmacy"
+      ],
+      "fronts": 2,
+      "s1Payments": 43,
+      "s2Requests": 0
+    },
+    {
+      "campaign": "P06",
+      "start": "2024-03-15T15:36:00",
+      "split": "train",
+      "ring": true,
+      "actives": [
+        "S2+S3:online_services",
+        "S1+S3:online_services"
+      ],
+      "fronts": 1,
+      "s1Payments": 61,
+      "s2Requests": 542
+    },
+    {
+      "campaign": "P07",
+      "start": "2024-03-17T06:00:00",
+      "split": "val",
+      "ring": true,
+      "actives": [
+        "S1+S3:restaurant"
+      ],
+      "fronts": 2,
+      "s1Payments": 51,
+      "s2Requests": 0
+    },
+    {
+      "campaign": "P08",
+      "start": "2024-03-17T19:12:00",
+      "split": "val",
+      "ring": false,
+      "actives": [
+        "S2:subscription"
+      ],
+      "fronts": 0,
+      "s1Payments": 0,
+      "s2Requests": 472
+    },
+    {
+      "campaign": "P09",
+      "start": "2024-03-19T04:48:00",
+      "split": "test",
+      "ring": false,
+      "actives": [
+        "S1:electronics",
+        "S2:subscription"
+      ],
+      "fronts": 0,
+      "s1Payments": 40,
+      "s2Requests": 514
+    },
+    {
+      "campaign": "P10",
+      "start": "2024-03-19T18:00:00",
+      "split": "test",
+      "ring": false,
+      "actives": [
+        "S2:utility_biller",
+        "S1:kirana"
+      ],
+      "fronts": 0,
+      "s1Payments": 30,
+      "s2Requests": 422
+    }
+  ]
+}
