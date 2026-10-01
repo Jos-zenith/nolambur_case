@@ -28,7 +28,8 @@ function useNarrow() {
   }, [])
   return narrow
 }
-const POLL_MS = 6000
+const POLL_MS = 12000 // slow enough that the picture settles between refreshes
+const SHOWN = 24 // most severe accounts drawn; more than this turns into a hairball
 
 type Node = NetworkNode & SimulationNodeDatum & { r: number; degree: number }
 type Edge = Omit<NetworkEdge, 'source' | 'target'> & { source: Node; target: Node }
@@ -53,6 +54,17 @@ const shortVpa = (v: string) => {
   return head.length > 16 ? `${head.slice(0, 15)}…` : head
 }
 
+/** Keep the SHOWN most severe alerted accounts and the flows that touch them (the saved copy may hold more). */
+function trim(net: Network): Network {
+  const rank = { critical: 0, high: 1, medium: 2, low: 3 } as const
+  const alerted = net.nodes.filter(n => n.severity).sort((a, b) => rank[a.severity!] - rank[b.severity!] || (b.gnnMax ?? 0) - (a.gnnMax ?? 0))
+  if (alerted.length <= SHOWN) return net
+  const keep = new Set(alerted.slice(0, SHOWN).map(n => n.id))
+  const edges = net.edges.filter(e => keep.has(e.source) || keep.has(e.target))
+  const ids = new Set(edges.flatMap(e => [e.source, e.target]))
+  return { ...net, nodes: net.nodes.filter(n => keep.has(n.id) || (!n.severity && ids.has(n.id))), edges: edges.filter(e => ids.has(e.source) && ids.has(e.target)), shown: SHOWN }
+}
+
 /** /rail/graph/network while the bridge is live; the captured copy while it wakes. */
 function useNetwork(paused: boolean) {
   const backend = useRail(s => s.backend)
@@ -63,7 +75,7 @@ function useNetwork(paused: boolean) {
     let stop = false
     const load = () => {
       if (document.hidden) return
-      fetch('/api/rail/graph/network?limit=40', { cache: 'no-store' })
+      fetch(`/api/rail/graph/network?limit=${SHOWN}`, { cache: 'no-store' })
         .then(r => (r.ok ? r.json() : null))
         .then(n => !stop && n && setLive(n))
         .catch(() => {})
@@ -75,7 +87,9 @@ function useNetwork(paused: boolean) {
       clearInterval(id)
     }
   }, [backend, paused])
-  return { net: live ?? saved, live: !!live }
+  const raw = live ?? saved
+  const net = useMemo(() => (raw ? trim(raw) : null), [raw]) // a stable object: the layout effect keys on it
+  return { net, live: !!live }
 }
 
 export function NetworkGraph() {
@@ -113,7 +127,7 @@ export function NetworkGraph() {
     }
     for (const n of net.nodes) {
       const old = prev.get(n.id)
-      const r = n.severity ? (n.severity === 'critical' ? 11 : n.severity === 'high' ? 9 : 7.5) : 4
+      const r = n.severity ? (n.severity === 'critical' ? 9 : n.severity === 'high' ? 7.5 : 5.5) : 2.6
       next.set(n.id, Object.assign(old ?? {}, n, { r, degree: degree.get(n.id) ?? 0 }) as Node)
     }
     for (const n of next.values()) {
@@ -133,8 +147,10 @@ export function NetworkGraph() {
     let sim = simRef.current
     if (!sim) {
       sim = forceSimulation<Node>()
-        .force('charge', forceManyBody<Node>().strength(n => (n.severity ? -110 : -30)))
-        .force('collide', forceCollide<Node>(n => n.r + 3))
+        .velocityDecay(0.55)
+        .alphaDecay(0.045)
+        .force('charge', forceManyBody<Node>().strength(n => (n.severity ? -170 : -26)))
+        .force('collide', forceCollide<Node>(n => n.r + 4))
       let raf = 0
       sim.on('tick', () => {
         if (!raf) raf = requestAnimationFrame(() => ((raf = 0), setFrame(f => f + 1)))
@@ -142,12 +158,12 @@ export function NetworkGraph() {
       simRef.current = sim
     }
     sim.nodes(nodes)
-    sim.force('x', forceX<Node>(W / 2).strength(W < H ? 0.14 : 0.1))
-    sim.force('y', forceY<Node>(H / 2).strength(W < H ? 0.1 : 0.16))
+    sim.force('x', forceX<Node>(W / 2).strength(W < H ? 0.1 : 0.06))
+    sim.force('y', forceY<Node>(H / 2).strength(W < H ? 0.07 : 0.11))
     sim.force('link', forceLink<Node, Edge>(edges).id(n => n.id).distance(e => (e.source.severity && e.target.severity ? 46 : 34)).strength(0.5))
     const resized = layoutW.current !== 0 && layoutW.current !== W
     layoutW.current = W
-    if (changed || resized) sim.alpha(prev.size && !resized ? 0.35 : 1).restart()
+    if (changed || resized) sim.alpha(prev.size && !resized ? 0.12 : 1).restart()
   }, [net, W, H])
 
   useEffect(() => () => void simRef.current?.stop(), [])
@@ -234,7 +250,7 @@ export function NetworkGraph() {
         <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-[12px] text-muted-foreground">
           <span className="flex items-center gap-2">
             <span className={cn('size-2 rounded-full', live && !frozenView ? 'live-dot bg-ok text-ok' : 'bg-sev-medium')} />
-            {live ? (frozenView ? 'Paused view' : `Live · refreshes every ${POLL_MS / 1000}s`) : capturedAt ? `Snapshot, ${capturedLabel(capturedAt)}` : 'Waiting for the bridge'}
+            {live ? (frozenView ? 'Paused view' : `Live · updates every ${POLL_MS / 1000}s`) : capturedAt ? `Snapshot, ${capturedLabel(capturedAt)}` : 'Waiting for the bridge'}
             {net && <span className="font-mono">· {clock(net.simT)}</span>}
           </span>
           <span className="flex items-center gap-1">
@@ -282,14 +298,17 @@ export function NetworkGraph() {
             onClick={e => e.target === e.currentTarget && setSelected(null)}
           >
             <defs>
-              {(['hot', 'cold'] as const).map(k => (
-                <marker key={k} id={`arrow-${k}`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-                  <path d="M0,0 L8,4 L0,8 z" fill={k === 'hot' ? 'var(--sev-high)' : 'var(--muted-foreground)'} />
-                </marker>
-              ))}
+              <marker id="arrow-hot" viewBox="0 0 8 8" refX="7" refY="4" markerUnits="userSpaceOnUse" markerWidth="7" markerHeight="7" orient="auto">
+                <path d="M0,1 L7,4 L0,7 z" fill="var(--sev-high)" fillOpacity={0.7} />
+              </marker>
+              <radialGradient id="graph-bg" cx="50%" cy="50%" r="65%">
+                <stop offset="0%" stopColor="var(--brand-soft)" stopOpacity={0.55} />
+                <stop offset="100%" stopColor="var(--card)" stopOpacity={0} />
+              </radialGradient>
             </defs>
+            <rect width={W} height={H} fill="url(#graph-bg)" pointerEvents="none" />
             <g transform={transform.toString()}>
-              <g fill="none">
+              <g fill="none" strokeLinecap="round">
                 {graph.edges.map(e => {
                   const hot = e.gnnMax >= threshold
                   const dim = linked && !(linked.has(e.source.id) && linked.has(e.target.id))
@@ -305,11 +324,10 @@ export function NetworkGraph() {
                       x2={(e.target.x ?? 0) - (dx / len) * pad}
                       y2={(e.target.y ?? 0) - (dy / len) * pad}
                       stroke={hot ? 'var(--sev-high)' : 'var(--muted-foreground)'}
-                      strokeOpacity={dim ? 0.08 : hot ? 0.75 : 0.3}
-                      strokeWidth={0.8 + 3.2 * Math.sqrt(e.amount / maxAmt)}
-                      strokeDasharray={e.blocked ? '3 3' : undefined}
-                      className={hot && !e.blocked && !dim ? 'flow' : undefined}
-                      markerEnd={`url(#arrow-${hot ? 'hot' : 'cold'})`}
+                      strokeOpacity={dim ? 0.06 : hot ? (linked ? 0.75 : 0.38) : 0.16}
+                      strokeWidth={0.7 + 1.8 * Math.sqrt(e.amount / maxAmt)}
+                      strokeDasharray={e.blocked ? '2 3' : undefined}
+                      markerEnd={hot && linked && !dim ? 'url(#arrow-hot)' : undefined}
                     />
                   )
                 })}
@@ -328,16 +346,21 @@ export function NetworkGraph() {
                     onPointerEnter={() => setHover(n.id)}
                     onPointerLeave={() => setHover(h => (h === n.id ? null : h))}
                   >
-                    {n.level >= 2 && <circle r={n.r + 4.5} fill="none" stroke="var(--ok)" strokeWidth={2.5} />}
-                    {n.level === 1 && <circle r={n.r + 4} fill="none" stroke="var(--sev-medium)" strokeWidth={1.5} strokeDasharray="2 2" />}
-                    <circle
-                      r={n.r}
-                      fill={n.severity ? SEV_FILL[n.severity] : 'var(--card)'}
-                      stroke={n.test ? 'var(--brand-2)' : n.severity ? 'var(--card)' : 'var(--muted-foreground)'}
-                      strokeWidth={n.test ? 2 : 1.2}
-                      strokeDasharray={n.test ? '2 2' : undefined}
-                    />
-                    {isFocus && <circle r={n.r + 8} fill="none" stroke="var(--brand-2)" strokeWidth={1.5} />}
+                    {n.level >= 2 && <circle r={n.r + 3.5} fill="none" stroke="var(--ok)" strokeWidth={1.6} strokeOpacity={0.85} />}
+                    {n.level === 1 && <circle r={n.r + 3.5} fill="none" stroke="var(--sev-medium)" strokeWidth={1.2} strokeDasharray="2 2" />}
+                    {n.severity ? (
+                      <circle
+                        r={n.r}
+                        fill={SEV_FILL[n.severity]}
+                        fillOpacity={n.severity === 'medium' ? 0.55 : 0.92}
+                        stroke={n.test ? 'var(--brand-2)' : 'var(--card)'}
+                        strokeWidth={n.test ? 2 : 1.5}
+                        strokeDasharray={n.test ? '2 2' : undefined}
+                      />
+                    ) : (
+                      <circle r={n.r} fill="var(--muted-foreground)" fillOpacity={0.4} />
+                    )}
+                    {isFocus && <circle r={n.r + 7} fill="none" stroke="var(--brand-2)" strokeWidth={1.5} />}
                     {(isFocus || (n.severity === 'critical' && transform.k >= 1.4)) && (
                       <text y={-n.r - 6} textAnchor="middle" fontSize={11 / Math.max(1, transform.k * 0.8)} className="fill-foreground" paintOrder="stroke" stroke="var(--card)" strokeWidth={3}>
                         {shortVpa(n.vpa)}
@@ -376,10 +399,10 @@ export function NetworkGraph() {
           <ul className="grid gap-1.5">
             <Legend swatch={<circle cx={9} cy={9} r={6} fill="var(--sev-critical)" />}>Critical alert (several signals)</Legend>
             <Legend swatch={<circle cx={9} cy={9} r={5} fill="var(--sev-high)" />}>High · medium in amber</Legend>
-            <Legend swatch={<circle cx={9} cy={9} r={3.5} fill="var(--card)" stroke="var(--muted-foreground)" />}>Counterparty, no alert</Legend>
-            <Legend swatch={<><circle cx={9} cy={9} r={4} fill="var(--sev-high)" /><circle cx={9} cy={9} r={7.5} fill="none" stroke="var(--ok)" strokeWidth={2} /></>}>Held or frozen: money stopped</Legend>
-            <Legend swatch={<line x1={1} y1={9} x2={17} y2={9} stroke="var(--sev-high)" strokeWidth={2.5} />}>GNN score ≥ {threshold.toFixed(2)}</Legend>
-            <Legend swatch={<line x1={1} y1={9} x2={17} y2={9} stroke="var(--muted-foreground)" strokeWidth={2} strokeDasharray="3 3" />}>Blocked transfer</Legend>
+            <Legend swatch={<circle cx={9} cy={9} r={2.6} fill="var(--muted-foreground)" fillOpacity={0.4} />}>Counterparty, no alert</Legend>
+            <Legend swatch={<><circle cx={9} cy={9} r={4} fill="var(--sev-high)" /><circle cx={9} cy={9} r={7.5} fill="none" stroke="var(--ok)" strokeWidth={1.6} /></>}>Held or frozen: money stopped</Legend>
+            <Legend swatch={<line x1={1} y1={9} x2={17} y2={9} stroke="var(--sev-high)" strokeOpacity={0.6} strokeWidth={2} />}>GNN score ≥ {threshold.toFixed(2)} (hover an account for direction)</Legend>
+            <Legend swatch={<line x1={1} y1={9} x2={17} y2={9} stroke="var(--muted-foreground)" strokeWidth={2} strokeDasharray="2 3" />}>Blocked transfer</Legend>
             <Legend swatch={<circle cx={9} cy={9} r={5} fill="var(--sev-high)" stroke="var(--brand-2)" strokeWidth={2} strokeDasharray="2 2" />}>Test scam you sent</Legend>
           </ul>
           <p className="mt-2 text-[11.5px] text-muted-foreground">Line width is the amount moved.</p>
