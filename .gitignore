@@ -33,3 +33,4 @@ Multi-GNN/.git
 Multi-GNN/__pycache__/
 *.pyc
 .env
+tsconfig.tsbuildinfo
