@@ -9,8 +9,8 @@ const plexSans = IBM_Plex_Sans({ subsets: ['latin'], weight: ['400', '500', '600
 const plexMono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--font-plex-mono' })
 
 export const metadata: Metadata = {
-  title: 'Merchant Risk Console',
-  description: 'Catch layering on a payment aggregator\'s own rails: onboarding linkage checks, live detectors, and law-enforcement evidence packs.',
+  title: 'Trustify',
+  description: 'Graph intelligence for merchant risk detection, trust scoring, and evidence-backed investigations.',
   icons: { icon: '/icon.svg' },
 }
 

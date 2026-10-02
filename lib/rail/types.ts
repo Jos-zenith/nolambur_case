@@ -120,6 +120,15 @@ export interface Metrics {
   autoHold: boolean
   blockedFraudAmount: number
   blockedGenuineAmount: number
+  /** non-scam payments into or out of a restricted account; absent in snapshots captured before 2026-10-01 */
+  blockedGenuinePayments?: number
+  blockedGenuineMaxAmount?: number
+  /** distinct accounts the router ever restricted in this run */
+  restrictedAccounts?: number
+  /** of those, labelled accounts that are not mules */
+  restrictedNonMules?: number
+  restrictionHours?: Record<'delay_settlement' | 'hold_outbound' | 'full_hold', number>
+  appealSlaHours?: number
 }
 
 export interface AuditEntry {

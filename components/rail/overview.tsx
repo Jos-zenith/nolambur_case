@@ -11,7 +11,7 @@ import type { Detector } from '@/lib/rail/types'
 import { cn } from '@/lib/utils'
 import { BackendGate, useWaitSeconds } from './BackendGate'
 import { GLOSSARY, Term, useCountUp, type TermKey } from './kit'
-import { MetricStrip } from './MetricStrip'
+import { collateralNote, MetricStrip } from './MetricStrip'
 import { MoneyTrails } from './MoneyTrails'
 import { ScamLab } from './ScamLab'
 
@@ -129,14 +129,18 @@ function HeroLive() {
       <p className="mt-4 text-[12.5px] text-white/70">Fraud money blocked</p>
       <p className="figure text-[48px] font-semibold leading-none tracking-tight">{inrShort(blocked)}</p>
       <p className="mt-1.5 text-[12.5px] text-white/65">
-        {m.heldAccounts} held · {m.frozenAccounts} frozen{m.blockedGenuineAmount > 0 ? ` · ${inrShort(m.blockedGenuineAmount)} genuine caught too` : ' · no genuine payments blocked'}
+        {m.restrictedAccounts !== undefined ? `${m.restrictedAccounts} accounts held during the run · ${m.heldAccounts} still held` : `${m.heldAccounts} held now`} ·{' '}
+        {m.frozenAccounts} frozen{m.blockedGenuineAmount > 0 ? '' : ' · no genuine payments blocked'}
       </p>
+      {collateralNote(m) && <p className="mt-1.5 text-[11.5px] leading-snug text-white/60">{collateralNote(m)}</p>}
       <div className="mt-4 grid grid-cols-3 gap-2 border-t border-white/10 pt-4 text-[12px]">
         <Mini label="Open alerts" value={String(m.openAlerts)} hot={m.openBySeverity.critical > 0} />
         <Mini label="Mules caught" value={`${m.mulesAlerted} of ${m.mulesSeen}`} />
         <Mini label="Median lead" value={duration(m.medianLeadSec)} />
       </div>
-      <p className="mt-3 text-[11.5px] text-white/55">This replay so far. Held-out test figures are further down.</p>
+      <p className="mt-3 text-[11.5px] leading-snug text-white/60">
+        Full-dataset replay, including the days the model trained on, so these run high. To quote: held-out test, 58–77% of mules caught at 58–78% precision.
+      </p>
     </div>
   )
 }
@@ -457,16 +461,21 @@ export function GlossaryGrid({ bare }: { bare?: boolean }) {
 // ---------------------------------------------------------------------------- shared
 
 export function SectionTitle({ icon: Icon, eyebrow, title, children, right }: { icon: typeof Zap; eyebrow: string; title: string; children?: React.ReactNode; right?: React.ReactNode }) {
+  // Title left, intro right on wide screens, so the intro uses the row instead of leaving it half empty.
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="grid gap-x-10 gap-y-1.5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-end">
       <div>
         <p className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-brand-2">
           <Icon className="size-3.5" /> {eyebrow}
         </p>
         <h2 className="mt-1 text-[22px] font-semibold leading-tight tracking-tight">{title}</h2>
-        {children && <p className="mt-1.5 max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">{children}</p>}
       </div>
-      {right}
+      {(children || right) && (
+        <div className={cn('flex flex-wrap items-end gap-x-6 gap-y-2', children ? 'justify-between' : 'lg:justify-end')}>
+          {children && <p className="min-w-0 flex-1 basis-80 text-[13.5px] leading-relaxed text-muted-foreground">{children}</p>}
+          {right && <div className="shrink-0">{right}</div>}
+        </div>
+      )}
     </div>
   )
 }
@@ -535,7 +544,7 @@ export function OverviewPage() {
       <section className="grid gap-4">
         <SectionTitle
           icon={Activity}
-          eyebrow="Running now · this replay so far"
+          eyebrow="Full-dataset replay · training days included"
           title="The engine, live"
           right={
             <Link href="/console" className="inline-flex items-center gap-1 text-[13px] font-medium text-brand-2 hover:underline">

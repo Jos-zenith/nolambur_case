@@ -116,8 +116,11 @@ export function ScamLab() {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-      <div className="rounded-xl border bg-card p-3 shadow-card">
-        <ChainDiagram scam={scam} alertsOn={alertsOn} />
+      <div className="flex flex-col rounded-xl border bg-card p-3 shadow-card">
+        {/* the steps column is usually taller: centre the diagram in the height it is given */}
+        <div className="grid flex-1 items-center">
+          <ChainDiagram scam={scam} alertsOn={alertsOn} />
+        </div>
         <div className="flex flex-wrap items-center justify-between gap-2 border-t px-1 pt-2 text-[12px] text-muted-foreground">
           <span>
             {scam ? (

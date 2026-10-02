@@ -1,4 +1,4 @@
-"""Payment-rail engine: the backend of the Merchant Risk Console.
+"""Payment-rail engine: the backend of Trustify.
 
 Runs the rule detectors and the trained GIN checkpoint on every payment as it arrives.
 By default payments arrive live (RAIL_SOURCE=webhook | kafka | kinesis, infra/ingest.py)
@@ -1043,7 +1043,7 @@ class RailEngine:
         case = self.cases.get(case_id)
         if not case:
             return {"error": "Case not found", "status": 404}
-        message = f"{case.id}: {len(case.alert_ids)} alerts, {len(case.account_ids)} accounts. Review in the risk console."
+        message = f"{case.id}: {len(case.alert_ids)} alerts, {len(case.account_ids)} accounts. Review in Trustify."
         result: dict[str, Any] = {"tool": "agents.tools_impl.notify_officer"}
         try:
             from agents.tools_impl import notify_officer
@@ -1110,6 +1110,10 @@ class RailEngine:
         mules_alerted = alerted_accounts & mules_active
         leads = [first_out[m] - first_alert[m] for m in mules_active if m in first_alert and m in first_out]
         last_minute = sum(1 for r in self.replayed[-400:] if r.t > self.sim_t - 60)
+        # Who the automatic restrictions landed on, and what the "genuine" collateral is made of:
+        # non-scam payments into or out of a restricted account (in this data, mules' own spending).
+        restricted = {e["account"] for e in self.restriction_log}
+        genuine_blocked = [r.amount for r in self.replayed if r.blocked and r.is_fraud == 0]
         return {
             "simT": self.sim_t,
             "source": self.source,
@@ -1146,7 +1150,14 @@ class RailEngine:
             "autoHold": self.auto_hold,
             "blockedFraudAmount": self.blocked_fraud,
             "blockedGenuineAmount": self.blocked_genuine,
+            "blockedGenuinePayments": len(genuine_blocked),
+            "blockedGenuineMaxAmount": max(genuine_blocked, default=0.0),
             "blockedUnlabelledAmount": self.blocked_unlabelled,
+            "restrictedAccounts": len(restricted),
+            # labelled accounts restricted that are not mules (clean or victim); unlabelled live accounts are left out
+            "restrictedNonMules": sum(1 for a in restricted if role.get(a) not in mule_roles and role.get(a) is not None),
+            "restrictionHours": {LEVELS[k]: v / 3600 for k, v in LEVEL_SECONDS.items()},
+            "appealSlaHours": APPEAL_SLA_SECONDS / 3600,
         }
 
     def snapshot(self) -> dict[str, Any]:

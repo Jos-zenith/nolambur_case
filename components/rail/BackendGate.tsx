@@ -1,6 +1,7 @@
 'use client'
 
-import { CircleDashed, History, PlugZap } from 'lucide-react'
+import { ArrowRight, CircleDashed, History, PlugZap } from 'lucide-react'
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
 import { capturedLabel } from '@/lib/rail/snapshot'
@@ -72,7 +73,9 @@ export function BackendGate({ children, allowSnapshot = false }: { children: Rea
 
   const waking = backend === 'warming' || backend === 'connecting' || (backend === 'offline' && seconds < 90)
   return (
-    <section className="max-w-3xl border bg-card p-5 text-[13.5px] leading-relaxed">
+    <section className="grid gap-3">
+    <div className="grid gap-5 rounded-xl border bg-card p-5 text-[13.5px] leading-relaxed shadow-card lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div>
       {waking ? (
         <>
           <h2 className="flex items-center gap-2 text-[15px] font-semibold">
@@ -81,8 +84,8 @@ export function BackendGate({ children, allowSnapshot = false }: { children: Rea
           </h2>
           <p className="mt-2 text-muted-foreground">{waitText(backend, seconds)}</p>
           <p className="mt-2 text-muted-foreground">
-            Once awake it loads <code className="font-mono text-[12.5px]">nolambur_transactions.csv</code> (30,353 rows) and scores every edge with the GIN
-            checkpoint. The page connects on its own when it is ready.
+            Once awake it replays the 10-day synthetic dataset (83,067 payments) and scores each one with the GIN checkpoint. The page connects on its own when
+            it is ready.
           </p>
         </>
       ) : (
@@ -100,6 +103,60 @@ export function BackendGate({ children, allowSnapshot = false }: { children: Rea
           {error && <p className="mt-3 font-mono text-[12px] text-sev-critical">{error}</p>}
         </>
       )}
+      </div>
+      <div className="rounded-lg bg-muted/40 p-4">
+        <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">Works without the bridge</p>
+        <ul className="mt-2 grid gap-1.5">
+          {OFFLINE_PAGES.map(p => (
+            <li key={p.href}>
+              <Link href={p.href} className="group flex items-baseline justify-between gap-3 text-[13px] hover:text-brand-2">
+                <span>
+                  <span className="font-medium">{p.label}</span> <span className="text-muted-foreground">· {p.note}</span>
+                </span>
+                <ArrowRight className="size-3.5 shrink-0 text-muted-foreground group-hover:text-brand-2" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+    <PageSkeleton />
     </section>
+  )
+}
+
+const OFFLINE_PAGES = [
+  { href: '/', label: 'Overview', note: 'last captured snapshot' },
+  { href: '/merchants', label: 'Merchants', note: 'merchant-side replay snapshot' },
+  { href: '/model', label: 'Model', note: 'training and held-out results' },
+]
+
+/** Where the page's content will land, so the wait reads as loading rather than an empty page. */
+function PageSkeleton() {
+  const bar = 'rounded-md bg-muted/70'
+  return (
+    <div aria-hidden className="grid animate-pulse gap-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className="grid gap-2 rounded-xl border bg-card p-4">
+            <div className={`${bar} h-3 w-1/2`} />
+            <div className={`${bar} h-6 w-2/3`} />
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <div className="grid content-start gap-2 rounded-xl border bg-card p-4">
+          {[0, 1, 2, 3, 4, 5].map(i => (
+            <div key={i} className={`${bar} h-10`} />
+          ))}
+        </div>
+        <div className="grid content-start gap-2 rounded-xl border bg-card p-4">
+          <div className={`${bar} h-4 w-1/3`} />
+          <div className={`${bar} h-40`} />
+          <div className={`${bar} h-4 w-2/3`} />
+          <div className={`${bar} h-4 w-1/2`} />
+        </div>
+      </div>
+    </div>
   )
 }

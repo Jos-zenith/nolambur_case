@@ -2,7 +2,7 @@
 
 import { ArrowRight, Network as NetworkIcon, Pause, Play } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { clock, inrShort } from '@/lib/rail/format'
 import { capturedLabel } from '@/lib/rail/snapshot'
@@ -78,7 +78,7 @@ function useNetwork(paused: boolean) {
 }
 
 type Side = 'in' | 'out'
-type Slot = { key: string; node: NetworkNode | null; more?: { count: number; amount: number }; col: number; y: number }
+type Slot = { key: string; node: NetworkNode | null; more?: { count: number; amount: number }; col: number; x: number; y: number }
 type Link = { key: string; from: Slot; to: Slot; amount: number; count: number; hot: boolean; blocked: boolean; label?: boolean; minor?: boolean }
 type Case = {
   key: string
@@ -87,6 +87,8 @@ type Case = {
   slots: Slot[]
   links: Link[]
   height: number
+  width: number
+  heads: { title: string; x: number }[]
   totalIn: number
   totalOut: number
   held: number
@@ -94,10 +96,12 @@ type Case = {
 }
 
 const ROW_H = 54
-const PAD = 26
+const PAD = 14
+const HEAD = 24 // the case's own column titles, above its marks
+const COL_TITLES = ['Paid in by', 'First under alert', 'Received from it', 'Further on']
 
 /** Cases from the network: connected accounts under alert, their layers, and their biggest outside payers and payees. */
-function buildCases(net: Network, threshold: number): Case[] {
+function buildCases(net: Network, threshold: number, width: number): Case[] {
   const byId = new Map(net.nodes.map(n => [n.id, n]))
   const alerted = net.nodes.filter(n => n.severity)
   const isAlert = (id: string) => !!byId.get(id)?.severity
@@ -141,21 +145,28 @@ function buildCases(net: Network, threshold: number): Case[] {
     const folded = new Map<string, string>() // member id -> its column's "more" slot key
     for (let l = 0; l < layers; l++) {
       const inLayer = members.filter(m => layer.get(m.id) === l).sort((a, b) => amountOf(b.id) - amountOf(a.id) || a.id.localeCompare(b.id))
-      for (const m of inLayer.slice(0, SIDE_MAX)) add({ key: m.id, node: m, col: 1 + l, y: 0 })
+      for (const m of inLayer.slice(0, SIDE_MAX)) add({ key: m.id, node: m, col: 1 + l, x: 0, y: 0 })
       const rest = inLayer.slice(SIDE_MAX)
       if (rest.length) {
-        add({ key: `L${l}:more`, node: null, more: { count: rest.length, amount: rest.reduce((t, m) => t + amountOf(m.id), 0) }, col: 1 + l, y: 0 })
+        add({ key: `L${l}:more`, node: null, more: { count: rest.length, amount: rest.reduce((t, m) => t + amountOf(m.id), 0) }, col: 1 + l, x: 0, y: 0 })
         for (const m of rest) folded.set(m.id, `L${l}:more`)
       }
     }
     const keyOf = (id: string) => folded.get(id) ?? id
-    for (const id of [...ins.shown].sort((a, b) => amountOf(b) - amountOf(a))) add({ key: `in:${id}`, node: byId.get(id) ?? null, col: 0, y: 0 })
-    for (const id of [...outs.shown].sort((a, b) => amountOf(b) - amountOf(a))) add({ key: `out:${id}`, node: byId.get(id) ?? null, col: layers + 1, y: 0 })
-    if (ins.rest.length) add({ key: 'in:more', node: null, more: { count: ins.rest.length, amount: ins.rest.reduce((t, r) => t + r[1], 0) }, col: 0, y: 0 })
-    if (outs.rest.length) add({ key: 'out:more', node: null, more: { count: outs.rest.length, amount: outs.rest.reduce((t, r) => t + r[1], 0) }, col: layers + 1, y: 0 })
+    for (const id of [...ins.shown].sort((a, b) => amountOf(b) - amountOf(a))) add({ key: `in:${id}`, node: byId.get(id) ?? null, col: 0, x: 0, y: 0 })
+    for (const id of [...outs.shown].sort((a, b) => amountOf(b) - amountOf(a))) add({ key: `out:${id}`, node: byId.get(id) ?? null, col: layers + 1, x: 0, y: 0 })
+    if (ins.rest.length) add({ key: 'in:more', node: null, more: { count: ins.rest.length, amount: ins.rest.reduce((t, r) => t + r[1], 0) }, col: 0, x: 0, y: 0 })
+    if (outs.rest.length) add({ key: 'out:more', node: null, more: { count: outs.rest.length, amount: outs.rest.reduce((t, r) => t + r[1], 0) }, col: layers + 1, x: 0, y: 0 })
+    // Each case spreads only the columns it has across the full width: no empty columns, no gaps.
     const tallest = Math.max(...columns.map(c => c.length))
-    const height = PAD * 2 + tallest * ROW_H
-    for (const col of columns) col.forEach((s, i) => (s.y = height / 2 + (i - (col.length - 1) / 2) * ROW_H))
+    const height = HEAD + PAD * 2 + tallest * ROW_H
+    const present = columns.map((c, i) => ({ c, i })).filter(({ c }) => c.length > 0)
+    const heads: Case['heads'] = []
+    present.forEach(({ c, i }, k) => {
+      const x = colX(k, present.length, width)
+      heads.push({ title: i === layers + 1 ? 'Paid out to' : (COL_TITLES.at(i) ?? 'Further on'), x })
+      c.forEach((s, j) => Object.assign(s, { x, y: HEAD + (height - HEAD) / 2 + (j - (c.length - 1) / 2) * ROW_H }))
+    })
 
     // links, folding the "+N more" parties into one line per account under alert
     const merged = new Map<string, Link>()
@@ -186,6 +197,8 @@ function buildCases(net: Network, threshold: number): Case[] {
       slots,
       links: [...merged.values()],
       height,
+      width,
+      heads,
       totalIn: ins.edges.reduce((t, e) => t + e.amount, 0),
       totalOut: outs.edges.reduce((t, e) => t + e.amount, 0),
       held: members.filter(m => m.level >= 2).length,
@@ -197,11 +210,26 @@ function buildCases(net: Network, threshold: number): Case[] {
 
 // ---------------------------------------------------------------------------- view
 
-const W = 980
-const colX = (col: number, layers: number) => {
-  const left = 150
-  const right = W - 150
-  return left + ((right - left) * col) / (layers + 1)
+/** Drawing width = the card's own width (never narrower than MIN_W), so text and rows draw at true size. */
+const MIN_W = 760
+/** x of the k-th of n columns: payer labels sit left of the first, payee labels right of the last. */
+function colX(k: number, n: number, width: number) {
+  const left = 140
+  const right = width - 140
+  return n <= 1 ? width / 2 : left + ((right - left) * k) / (n - 1)
+}
+
+function useWidth() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(980)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const ro = new ResizeObserver(([e]) => setWidth(Math.max(MIN_W, Math.round(e.contentRect.width))))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return { ref, width }
 }
 
 export function MoneyTrails() {
@@ -209,18 +237,53 @@ export function MoneyTrails() {
   const { net, live } = useNetwork(paused)
   const threshold = useRail(s => s.metrics?.modelThreshold ?? 0.9)
   const capturedAt = useRail(s => s.snapshot?.capturedAt ?? null)
-  const cases = useMemo(() => (net ? buildCases(net, threshold) : []), [net, threshold])
+  const { ref: trailsRef, width } = useWidth()
+  const cases = useMemo(() => (net ? buildCases(net, threshold, width) : []), [net, threshold, width])
   const [showAll, setShowAll] = useState(false)
   const [focus, setFocus] = useState<string | null>(null)
   const [hover, setHover] = useState<string | null>(null)
   const shown = showAll ? cases : cases.slice(0, FIRST_ROWS)
-  const layers = Math.max(1, ...shown.map(c => c.layers))
   const maxAmt = Math.max(1, ...shown.flatMap(c => c.links.map(l => l.amount)))
   const focusNode = focus ? (net?.nodes.find(n => n.id === focus) ?? null) : null
 
+  // Reading guide, counts and legend sit in one row above the trails, so the trails take the full width.
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-      <div className="overflow-hidden rounded-xl border bg-card shadow-card">
+    <div className="grid gap-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,5fr)_minmax(0,3fr)_minmax(0,4fr)]">
+        <div className="rounded-lg border bg-card p-3.5 shadow-card">
+          <p className="text-[13px] font-semibold">How to read it</p>
+          <ol className="mt-1.5 grid list-decimal gap-1 pl-4 text-[12.5px] leading-relaxed text-muted-foreground">
+            <li>Each row is one case: accounts under alert that sent money to each other.</li>
+            <li>Read left to right: who paid in, the account that received it first, the accounts it passed it to, and where it left.</li>
+            <li>Line width is the amount; the figure on a line is what moved along it. Click an account for its alert.</li>
+          </ol>
+        </div>
+        <div className="flex flex-col justify-center rounded-lg border bg-card p-3.5 shadow-card">
+          <dl className="grid grid-cols-3 gap-2 text-center">
+            <Figure label="cases" value={cases.length} />
+            <Figure label="accounts under alert" value={cases.reduce((t, c) => t + c.alerted.length, 0)} />
+            <Figure label="held" value={cases.reduce((t, c) => t + c.held, 0)} tone="text-ok" />
+          </dl>
+          {net && net.alertedAccounts > net.shown && (
+            <p className="mt-2 text-center text-[11.5px] text-muted-foreground">
+              The {net.shown} most severe of {net.alertedAccounts} accounts under alert.
+            </p>
+          )}
+        </div>
+        <div className="rounded-lg border bg-card p-3.5 text-[12px] shadow-card md:col-span-2 xl:col-span-1">
+          <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">Legend</p>
+          <ul className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+            <Legend swatch={<circle cx={9} cy={9} r={6} fill="var(--sev-critical)" />}>Under alert: critical</Legend>
+            <Legend swatch={<circle cx={9} cy={9} r={6} fill="var(--sev-high)" />}>High · medium in amber</Legend>
+            <Legend swatch={<><circle cx={9} cy={9} r={5} fill="var(--sev-high)" /><circle cx={9} cy={9} r={8} fill="none" stroke="var(--ok)" strokeWidth={1.6} /></>}>Held or frozen</Legend>
+            <Legend swatch={<circle cx={9} cy={9} r={3.5} fill="var(--muted-foreground)" fillOpacity={0.45} />}>Paid in or out, no alert</Legend>
+            <Legend swatch={<line x1={1} y1={9} x2={17} y2={9} stroke="var(--sev-high)" strokeOpacity={0.6} strokeWidth={3} />}>Model {threshold.toFixed(2)}+ (likely fraud)</Legend>
+            <Legend swatch={<line x1={1} y1={9} x2={17} y2={9} stroke="var(--muted-foreground)" strokeOpacity={0.5} strokeWidth={2} strokeDasharray="3 3" />}>Blocked by a hold</Legend>
+          </ul>
+        </div>
+      </div>
+
+      <div ref={trailsRef} className="overflow-hidden rounded-xl border bg-card shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-[12px] text-muted-foreground">
           <span className="flex items-center gap-2">
             <span className={cn('size-2 rounded-full', live && !paused ? 'live-dot bg-ok text-ok' : 'bg-sev-medium')} />
@@ -248,9 +311,8 @@ export function MoneyTrails() {
         ) : (
           <div className="overflow-x-auto">
             <div className="min-w-[760px]">
-              <ColumnHeads layers={layers} />
               {shown.map((c, i) => (
-                <CaseRow key={c.key} c={c} index={i} layers={layers} maxAmt={maxAmt} focus={focus} hover={hover} onFocus={setFocus} onHover={setHover} />
+                <CaseRow key={c.key} c={c} index={i} maxAmt={maxAmt} focus={focus} hover={hover} onFocus={setFocus} onHover={setHover} />
               ))}
             </div>
           </div>
@@ -262,69 +324,19 @@ export function MoneyTrails() {
         )}
       </div>
 
-      <aside className="grid content-start gap-3">
-        <div className="rounded-lg border bg-card p-3.5 shadow-card">
-          {focusNode ? (
-            <NodeDetail node={focusNode} edges={net?.edges ?? []} onClose={() => setFocus(null)} />
-          ) : (
-            <>
-              <p className="text-[13px] font-semibold">How to read it</p>
-              <ol className="mt-1.5 grid list-decimal gap-1 pl-4 text-[12.5px] leading-relaxed text-muted-foreground">
-                <li>Each row is one case: accounts under alert that sent money to each other.</li>
-                <li>Read left to right: who paid in, the account that received it first, the accounts it passed it to, and where it left.</li>
-                <li>Line width is the amount; the figure on a line is what moved along it.</li>
-                <li>Click an account for its alert.</li>
-              </ol>
-              <dl className="mt-3 grid grid-cols-3 gap-2 border-t pt-3 text-center">
-                <Figure label="cases" value={cases.length} />
-                <Figure label="accounts under alert" value={cases.reduce((t, c) => t + c.alerted.length, 0)} />
-                <Figure label="held" value={cases.reduce((t, c) => t + c.held, 0)} tone="text-ok" />
-              </dl>
-              {net && net.alertedAccounts > net.shown && (
-                <p className="mt-2 text-[11.5px] text-muted-foreground">
-                  The {net.shown} most severe of {net.alertedAccounts} accounts under alert.
-                </p>
-              )}
-            </>
-          )}
-        </div>
-        <div className="rounded-lg border bg-card p-3.5 text-[12px] shadow-card">
-          <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">Legend</p>
-          <ul className="grid gap-1.5">
-            <Legend swatch={<circle cx={9} cy={9} r={6} fill="var(--sev-critical)" />}>Under alert: critical</Legend>
-            <Legend swatch={<circle cx={9} cy={9} r={6} fill="var(--sev-high)" />}>Under alert: high · medium in amber</Legend>
-            <Legend swatch={<><circle cx={9} cy={9} r={5} fill="var(--sev-high)" /><circle cx={9} cy={9} r={8} fill="none" stroke="var(--ok)" strokeWidth={1.6} /></>}>Held or frozen: money stopped</Legend>
-            <Legend swatch={<circle cx={9} cy={9} r={3.5} fill="var(--muted-foreground)" fillOpacity={0.45} />}>Paid in or paid out, no alert</Legend>
-            <Legend swatch={<line x1={1} y1={9} x2={17} y2={9} stroke="var(--sev-high)" strokeOpacity={0.6} strokeWidth={3} />}>Model scored it {threshold.toFixed(2)}+ (likely fraud)</Legend>
-            <Legend swatch={<line x1={1} y1={9} x2={17} y2={9} stroke="var(--muted-foreground)" strokeOpacity={0.5} strokeWidth={2} strokeDasharray="3 3" />}>Blocked by a hold</Legend>
-          </ul>
-        </div>
-      </aside>
-    </div>
-  )
-}
 
-function ColumnHeads({ layers }: { layers: number }) {
-  const titles = ['Paid in by', 'First account under alert', 'Received from it', 'Further on'].slice(0, layers + 1)
-  titles.push('Paid out to')
-  return (
-    <svg viewBox={`0 0 ${W} 34`} className="block w-full border-b bg-muted/30" aria-hidden>
-      {titles.map((t, i) => (
-        <text key={t} x={colX(i, layers)} y={21} textAnchor="middle" className="fill-muted-foreground" fontSize={12} fontWeight={600}>
-          {t}
-        </text>
-      ))}
-      {Array.from({ length: layers + 1 }, (_, i) => (
-        <path key={i} d={`M${(colX(i, layers) + colX(i + 1, layers)) / 2 - 5},13 l6,4 -6,4`} fill="none" stroke="var(--muted-foreground)" strokeOpacity={0.5} />
-      ))}
-    </svg>
+      {focusNode && (
+        <div className="fixed bottom-4 right-4 z-40 w-[min(340px,calc(100vw-2rem))] rounded-lg border bg-card p-3.5 shadow-lg">
+          <NodeDetail node={focusNode} edges={net?.edges ?? []} onClose={() => setFocus(null)} />
+        </div>
+      )}
+    </div>
   )
 }
 
 function CaseRow({
   c,
   index,
-  layers,
   maxAmt,
   focus,
   hover,
@@ -333,7 +345,6 @@ function CaseRow({
 }: {
   c: Case
   index: number
-  layers: number
   maxAmt: number
   focus: string | null
   hover: string | null
@@ -343,7 +354,8 @@ function CaseRow({
   const lit = hover ?? focus
   const touches = (l: Link) => !!lit && (l.from.node?.id === lit || l.to.node?.id === lit)
   const anyLit = !!lit && c.slots.some(s => s.node?.id === lit)
-  const x = (s: Slot) => colX(s.col, layers)
+  const x = (s: Slot) => s.x
+  const layers = c.layers
   return (
     <div className={cn('border-b last:border-b-0', index % 2 && 'bg-muted/20')}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pt-2 text-[12px]">
@@ -355,7 +367,12 @@ function CaseRow({
           {c.held ? ` · ${c.held} held` : ''}
         </span>
       </div>
-      <svg viewBox={`0 0 ${W} ${c.height}`} className="block w-full" role="img" aria-label={`Case ${index + 1}: ${c.alerted.length} accounts under alert`}>
+      <svg viewBox={`0 0 ${c.width} ${c.height}`} className="block w-full" role="img" aria-label={`Case ${index + 1}: ${c.alerted.length} accounts under alert`}>
+        {c.heads.map(h => (
+          <text key={h.title} x={h.x} y={16} textAnchor="middle" fontSize={11} fontWeight={600} className="fill-muted-foreground" letterSpacing={0.3}>
+            {h.title}
+          </text>
+        ))}
         {c.links.map(l => {
           const x1 = x(l.from) + 10
           const x2 = x(l.to) - 12

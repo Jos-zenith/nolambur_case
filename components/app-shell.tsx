@@ -1,6 +1,6 @@
 'use client'
 
-import { Briefcase, Brain, LayoutDashboard, ListChecks, ScanSearch, Server, ShieldHalf, Store } from 'lucide-react'
+import { Briefcase, Brain, LayoutDashboard, ListChecks, ScanSearch, Server, Store } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -20,6 +20,30 @@ const NAV = [
   { href: '/platform', label: 'Platform', icon: Server },
 ]
 
+function TrustifyMark() {
+  return (
+    <svg viewBox="0 0 32 32" className="size-8" aria-hidden="true">
+      <defs>
+        <linearGradient id="trustify-gradient" x1="6" y1="4" x2="26" y2="28" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#7C3AED" />
+          <stop offset="0.5" stopColor="#3B82F6" />
+          <stop offset="1" stopColor="#22C55E" />
+        </linearGradient>
+      </defs>
+      <path d="M16 2.5L25.5 6v8.4c0 6.8-3.7 12.7-9.5 15.8-5.8-3.1-9.5-9-9.5-15.8V6L16 2.5Z" fill="url(#trustify-gradient)" opacity="0.9"/>
+      <path d="M16 5.8L22.9 8.4v6.9c0 5-2.6 9.3-6.9 12.1-4.3-2.8-6.9-7.1-6.9-12.1V8.4L16 5.8Z" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.7)" strokeWidth="0.9"/>
+      <path d="M9.5 15.6 13.8 13.8l2.3 2.6 5.3-4.7M13.8 13.8v6.1M10.4 20.4l3.4-4.2 4.8 4.9 4.1-5.4" fill="none" stroke="rgba(255,255,255,0.92)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx="9.5" cy="15.6" r="1.5" fill="#F8FAFC"/>
+      <circle cx="13.8" cy="13.8" r="1.5" fill="#F8FAFC"/>
+      <circle cx="16.1" cy="16.5" r="1.5" fill="#F8FAFC"/>
+      <circle cx="21.5" cy="11.8" r="1.5" fill="#F8FAFC"/>
+      <circle cx="10.4" cy="20.4" r="1.5" fill="#F8FAFC"/>
+      <circle cx="15.2" cy="20.8" r="1.5" fill="#F8FAFC"/>
+      <circle cx="21.8" cy="15.3" r="1.5" fill="#F8FAFC"/>
+    </svg>
+  )
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   useRailStream()
   const pathname = usePathname()
@@ -31,12 +55,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="no-print sticky top-0 z-30 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-4 px-4">
           <Link href="/" className="flex shrink-0 items-center gap-2.5 whitespace-nowrap">
-            <span className="grid size-8 place-items-center rounded-md bg-brand-1 text-white shadow-sm">
-              <ShieldHalf className="size-4" strokeWidth={2} />
+            <span className="grid size-8 place-items-center rounded-md bg-transparent shadow-sm ring-1 ring-border/80">
+              <TrustifyMark />
             </span>
             <span className="hidden leading-tight lg:block">
-              <span className="block text-[14px] font-semibold tracking-tight">Merchant Risk Console</span>
-              <span className="block text-[11px] text-muted-foreground">Operation Nolambur</span>
+              <span className="block text-[14px] font-semibold tracking-tight">Trustify</span>
+              <span className="block text-[11px] text-muted-foreground">Graph intelligence</span>
             </span>
           </Link>
           <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden rounded-lg bg-muted/60 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -171,8 +195,14 @@ function LiveStrip() {
               <Counter label="payments" value={m.ingested} className="hidden sm:flex" />
             )}
             <span className="hidden items-center gap-2 md:flex" title="Payments per 0.5 s tick, last minute">
-              <Spark data={ticks.slice(-40)} w={72} h={20} />
-              <Counter label="/min" value={m.txnsLastMinute} />
+              {m.done && m.rowsTotal !== null ? (
+                <span className="text-muted-foreground">replay finished</span>
+              ) : (
+                <>
+                  <Spark data={ticks.slice(-40)} w={72} h={20} />
+                  <Counter label="/min" value={m.txnsLastMinute} />
+                </>
+              )}
             </span>
             <span className="ml-auto hidden h-4 w-px bg-border lg:block" />
             <Counter label="open alerts" value={m.openAlerts} tone={m.openBySeverity?.critical ? 'critical' : 'warning'} className="hidden lg:flex" />

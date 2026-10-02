@@ -1,4 +1,4 @@
-"""Who may do what in the risk console.
+"""Who may do what in Trustify.
 
 Identity is the X-Rail-Actor header, looked up in the user directory below (override
 with RAIL_USERS='{"name": "role", ...}'). There is no login: this is authorisation,
