@@ -1,0 +1,239 @@
+{
+ "facts": {
+  "upiFraudIncidentsFY25": {
+   "value": 1264000.0,
+   "source": "https://madhyamamonline.com/india/upi-linked-frauds-amount-to-rs-805-crore-far-fy26-govt-1477281",
+   "note": "Lok Sabha, 15 Dec 2025"
+  },
+  "upiFraudAmountFY25Rs": {
+   "value": 9810000000.0,
+   "source": "https://madhyamamonline.com/india/upi-linked-frauds-amount-to-rs-805-crore-far-fy26-govt-1477281",
+   "note": "Rs 981 crore"
+  },
+  "upiTransactionsFY25": {
+   "value": 185900000000.0,
+   "source": "https://www.medianama.com/2025/05/223-upi-84-india-fy25-retail-payment-volume-rbi/",
+   "note": "RBI Annual Report 2024-25"
+  },
+  "cyberFraudLoss2024Rs": {
+   "value": 228457300000.0,
+   "source": "https://www.indiatvnews.com/technology/news/indians-lost-over-rs-22-845-crore-to-cyber-fraud-in-2024-incidents-skyrocket-by-206-government-2025-07-22-1000037",
+   "note": "NCRP + CFCFRMS, Lok Sabha, 22 Jul 2025"
+  },
+  "cyberFraudIncidents2024": {
+   "value": 3637288,
+   "source": "https://www.indiatvnews.com/technology/news/indians-lost-over-rs-22-845-crore-to-cyber-fraud-in-2024-incidents-skyrocket-by-206-government-2025-07-22-1000037"
+  },
+  "layer1MuleAccountsShared": {
+   "value": 2467000.0,
+   "source": "https://the420.in/cybercrime-suspect-registry-8031-crore-saved-mha-i4c-fraud-block/",
+   "note": "I4C Suspect Registry, Sep 2024 to Dec 2025 (about 15 months)"
+  },
+  "fraudAnalystSalaryRs": {
+   "value": 502768,
+   "source": "https://in.indeed.com/career/fraud-analyst/salaries",
+   "note": "Indeed India average, 34 salaries, updated 20 Sep 2026"
+  },
+  "rbiFailedTxnCompensationRsPerDay": {
+   "value": 100,
+   "source": "https://www.medianama.com/2019/09/223-rbi-penalties-failed-transaction/",
+   "note": "RBI TAT circular, 20 Sep 2019: Rs 100 a day past the reversal deadline"
+  }
+ },
+ "derived": {
+  "upiFraudRatePerTransaction": 6.799354491662184e-06,
+  "avgUpiLossPerIncidentRs": 7761,
+  "avgCyberLossPerIncidentRs": 62810,
+  "moneyPerLayer1MuleRs": 115757
+ },
+ "params": {
+  "moneyPerMuleRs": {
+   "low": 30000,
+   "central": 115800.0,
+   "high": 230000.0,
+   "basis": "Central = 2024 cyber-fraud loss x 15/12 / 24.67 lakh Layer-1 mule accounts. Low allows for mules the registry missed and losses that never touch a mule; high for losses spread over fewer active mules.",
+   "sources": [
+    "https://www.indiatvnews.com/technology/news/indians-lost-over-rs-22-845-crore-to-cyber-fraud-in-2024-incidents-skyrocket-by-206-government-2025-07-22-1000037",
+    "https://the420.in/cybercrime-suspect-registry-8031-crore-saved-mha-i4c-fraud-block/"
+   ]
+  },
+  "shareStoppedByHold": {
+   "low": 0.05,
+   "central": 0.15,
+   "high": 0.3,
+   "basis": "Synthetic replays: holds stop 11-19% of test-day fraud money (reports/README.md 2, 3.3). No real-traffic figure. Assumption around it.",
+   "sources": [
+    "reports/README.md"
+   ]
+  },
+  "analystCostPerMinuteRs": {
+   "low": 6.245565217391304,
+   "central": 8.20367365967366,
+   "high": 13.300740740740741,
+   "basis": "Indeed average salary, loaded x1.2-2.0 (assumption: benefits, tools, supervision, office), over 210-230 days of 6-7 productive hours.",
+   "sources": [
+    "https://in.indeed.com/career/fraud-analyst/salaries"
+   ]
+  },
+  "minutesPerAlert": {
+   "low": 5,
+   "central": 15,
+   "high": 30,
+   "basis": "Vendor-reported range of 5-30 minutes per alert (weak source; no primary study found). Assumption.",
+   "sources": [
+    "https://www.fluxforce.ai/blog/fraud-alert-fatigue"
+   ]
+  },
+  "shareOfAlertsRestricted": {
+   "low": 0.05,
+   "central": 0.15,
+   "high": 0.5,
+   "basis": "Router restricts only corroborated alerts: 4 of 29 alerted accounts on the test days, 27 of 181 over the full replay (~15%).",
+   "sources": [
+    "reports/README.md"
+   ]
+  },
+  "costPerWrongRestrictionRs": {
+   "low": 200,
+   "central": 600,
+   "high": 3000,
+   "basis": "Rs 100 a day, the RBI failed-transaction compensation rate, as the regulator's own price of a held payment, for a 1-3 day hold; plus handling the appeal (about 10 analyst minutes) and lost goodwill or churn (assumption: Rs 0-2,000, small because UPI P2P and small-merchant payments carry no MDR).",
+   "sources": [
+    "https://www.medianama.com/2019/09/223-rbi-penalties-failed-transaction/"
+   ]
+  },
+  "fixedCostPerYearRs": {
+   "low": 500000.0,
+   "central": 1500000.0,
+   "high": 4000000.0,
+   "basis": "Assumption: hosting, data pipeline, model upkeep share of an engineer. Analyst time is counted per alert, not here.",
+   "sources": []
+  },
+  "alertsPerDay": {
+   "low": 50,
+   "central": 50,
+   "high": 50,
+   "basis": "The pilot's review budget: 2 analysts x 25 accounts a day.",
+   "sources": []
+  }
+ },
+ "scenarios": {
+  "low": {
+   "inputs": {
+    "moneyPerMuleRs": 30000,
+    "shareStoppedByHold": 0.05,
+    "analystCostPerMinuteRs": 13.3,
+    "minutesPerAlert": 30,
+    "shareOfAlertsRestricted": 0.5,
+    "costPerWrongRestrictionRs": 3000,
+    "fixedCostPerYearRs": 4000000.0,
+    "alertsPerDay": 50
+   },
+   "savedPerConfirmedMuleRs": 1500,
+   "reviewCostRs": 399.0,
+   "breakevenPrecisionPerAlert": 0.63301,
+   "breakevenPrecisionWithFixedCost": 0.70607,
+   "mulesCaughtPerYearAtBreakeven": 12885.7
+  },
+  "central": {
+   "inputs": {
+    "moneyPerMuleRs": 115800.0,
+    "shareStoppedByHold": 0.15,
+    "analystCostPerMinuteRs": 8.2,
+    "minutesPerAlert": 15,
+    "shareOfAlertsRestricted": 0.15,
+    "costPerWrongRestrictionRs": 600,
+    "fixedCostPerYearRs": 1500000.0,
+    "alertsPerDay": 50
+   },
+   "savedPerConfirmedMuleRs": 17370,
+   "reviewCostRs": 123.1,
+   "breakevenPrecisionPerAlert": 0.0122,
+   "breakevenPrecisionWithFixedCost": 0.01691,
+   "mulesCaughtPerYearAtBreakeven": 308.6
+  },
+  "high": {
+   "inputs": {
+    "moneyPerMuleRs": 230000.0,
+    "shareStoppedByHold": 0.3,
+    "analystCostPerMinuteRs": 6.25,
+    "minutesPerAlert": 5,
+    "shareOfAlertsRestricted": 0.05,
+    "costPerWrongRestrictionRs": 200,
+    "fixedCostPerYearRs": 500000.0,
+    "alertsPerDay": 50
+   },
+   "savedPerConfirmedMuleRs": 69000,
+   "reviewCostRs": 31.2,
+   "breakevenPrecisionPerAlert": 0.0006,
+   "breakevenPrecisionWithFixedCost": 0.00099,
+   "mulesCaughtPerYearAtBreakeven": 18.1
+  }
+ },
+ "monteCarlo": {
+  "draws": 200000,
+  "breakevenPrecision": {
+   "p10": 0.01302,
+   "p25": 0.01818,
+   "p50": 0.02695,
+   "p75": 0.0409,
+   "p90": 0.06029
+  },
+  "atPrecision": {
+   "0.002": {
+    "chanceWorthIt": 0.0,
+    "medianNetPerYearRs": -8650603
+   },
+   "0.004": {
+    "chanceWorthIt": 0.0,
+    "medianNetPerYearRs": -7911521
+   },
+   "0.011": {
+    "chanceWorthIt": 0.054,
+    "medianNetPerYearRs": -5426691
+   },
+   "0.020": {
+    "chanceWorthIt": 0.307,
+    "medianNetPerYearRs": -2367359
+   },
+   "0.040": {
+    "chanceWorthIt": 0.739,
+    "medianNetPerYearRs": 4537728
+   },
+   "0.100": {
+    "chanceWorthIt": 0.981,
+    "medianNetPerYearRs": 25946991
+   },
+   "0.200": {
+    "chanceWorthIt": 0.999,
+    "medianNetPerYearRs": 61873557
+   }
+  }
+ },
+ "achievable": {
+  "accountQueueAtReportedRate": {
+   "precision": 0.004,
+   "range": [
+    0.002,
+    0.011
+   ],
+   "source": "reports/README.md 3.2 (arithmetic from synthetic false-alert rate)"
+  },
+  "modelPerPaymentAtReportedRate": {
+   "precision": 0.04,
+   "range": [
+    0.01,
+    0.29
+   ],
+   "source": "reports/README.md 3.2"
+  },
+  "syntheticTestAccountQueue": {
+   "precision": [
+    0.58,
+    0.78
+   ],
+   "source": "reports/README.md 2-3.4 (fraud 500x more common than real)"
+  }
+ },
+ "note": "scenarios 'low' = every input against the queue (pessimistic), 'high' = every input for it (optimistic)."
+}

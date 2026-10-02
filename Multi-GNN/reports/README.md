@@ -566,3 +566,109 @@ Sources:
 - [I4C Suspect Registry (The420.in)](https://the420.in/i4c-suspect-registry-blocks-8031-crore-cyber-fraud-mule-accounts/)
 - [I4C and RBIH on mule accounts (The420.in)](https://the420.in/i4c-rbih-ai-mule-accounts-cyber-fraud-crackdown/)
 - [UPI limits, Sept 2025 (Outlook Money)](https://www.outlookmoney.com/banking/npci-changes-upi-transaction-limits-for-key-categories-from-september-15-2025-know-the-details)
+
+## 7. Break-even: what precision makes the queue worth running
+
+**At the reported UPI fraud rate, the account queue is not worth running as it stands.** Its projected precision, 0.4% (section 3.2), sits well below break-even. Break-even precision is about 2.7%, with a 10th–90th percentile range of 1.3–6.0%. A pilot that reaches **6% precision within its daily review budget** pays for itself in about 9 cases out of 10. That is the target. Measured by `python -m infra.breakeven` (`breakeven.json`).
+
+**The model.** For each alert an analyst reviews:
+
+```latex
+\text{value per alert} = p \cdot B - C - (1 - p)\, h\, F
+\qquad
+p^{*} = \frac{K / (365 A) + C + h F}{B + h F}
+```
+
+- **p** is precision: the share of alerted accounts that are mules.
+- **B** is the money one confirmed mule alert saves: the money that passes through a mule, times the share a hold stops.
+- **C** is the analyst cost of one review.
+- **h** is the share of alerts the router restricts automatically. Only these burden an innocent customer.
+- **F** is the cost of wrongly restricting one genuine account.
+- **K** is the yearly fixed cost, and **A** the alerts reviewed a day (50: two analysts × 25).
+
+**Reported figures the inputs are built on.**
+
+| Figure | Value | Source |
+|---|---|---|
+| UPI fraud, FY 2024–25 | 12.64 lakh incidents, ₹981 crore (₹7,761 per incident) | [Lok Sabha reply, 15 Dec 2025](https://madhyamamonline.com/india/upi-linked-frauds-amount-to-rs-805-crore-far-fy26-govt-1477281) |
+| UPI transactions, FY 2024–25 | 185.9 billion (fraud ≈ 0.0007% of payments) | [RBI Annual Report, via MediaNama](https://www.medianama.com/2025/05/223-upi-84-india-fy25-retail-payment-volume-rbi/) |
+| All cyber-fraud losses, 2024 | ₹22,845.73 crore, 36.37 lakh incidents | [Lok Sabha reply, 22 Jul 2025](https://www.indiatvnews.com/technology/news/indians-lost-over-rs-22-845-crore-to-cyber-fraud-in-2024-incidents-skyrocket-by-206-government-2025-07-22-1000037) |
+| Layer-1 mule accounts in the I4C Suspect Registry | 24.67 lakh, Sep 2024 to Dec 2025 | [The420.in](https://the420.in/cybercrime-suspect-registry-8031-crore-saved-mha-i4c-fraud-block/) |
+| Fraud analyst salary, India | ₹5.03 lakh a year (34 salaries) | [Indeed India](https://in.indeed.com/career/fraud-analyst/salaries) |
+| RBI compensation for a failed UPI payment not reversed in time | ₹100 a day | [RBI TAT circular, 20 Sep 2019, via MediaNama](https://www.medianama.com/2019/09/223-rbi-penalties-failed-transaction/) |
+
+**Inputs.** Ranges are deliberately wide. Each draws a triangular distribution in a Monte Carlo of 200,000 runs.
+
+| Input | Low | Central | High | Basis |
+|---|---|---|---|---|
+| Money through one mule | ₹30,000 | ₹1.16 lakh | ₹2.3 lakh | Central: 2024 cyber-fraud loss × 15/12 ÷ 24.67 lakh Layer-1 mules |
+| Share a hold stops | 5% | 15% | 30% | Synthetic replays stop 11–19% (sections 2, 3.3); no real figure |
+| Analyst cost per minute | ₹6.3 | ₹8.2 | ₹13.3 | Salary × 1.2–2.0 overhead (assumption), 210–230 working days |
+| Minutes per alert | 5 | 15 | 30 | Vendor-reported range ([FluxForce](https://www.fluxforce.ai/blog/fraud-alert-fatigue)); weak source, an assumption |
+| Share of alerts restricted | 5% | 15% | 50% | Router: 4 of 29 alerted accounts on the test days, 27 of 181 over the full replay |
+| Cost of a wrong restriction | ₹200 | ₹600 | ₹3,000 | RBI's ₹100 a day for 1–3 days, plus appeal handling and churn (assumption) |
+| Fixed cost a year | ₹5 lakh | ₹15 lakh | ₹40 lakh | Hosting, pipeline, model upkeep (assumption) |
+
+**Result: the chance the queue is worth running, by precision.**
+
+| Precision within the daily budget | Chance worth it | Median net a year |
+|---|---|---|
+| 0.2% | 0% | −₹86.5 lakh |
+| 0.4% (projected account queue, section 3.2) | 0% | −₹79.1 lakh |
+| 1.1% (the projection's optimistic end) | 5% | −₹54.3 lakh |
+| 2% | 31% | −₹23.7 lakh |
+| 4% (projected model, per payment) | 74% | +₹45.4 lakh |
+| 10% | 98% | +₹2.6 crore |
+| 20% | ~100% | +₹6.2 crore |
+
+**Corner cases.** With every input set against the queue, break-even is 71% precision. With every input set for it, break-even is 0.1%. The central case is 1.7%, at about 310 confirmed mules a year, or 0.85 a day.
+
+**What it means.**
+- **Precision is the binding constraint, not recall.** With a fixed budget of 50 reviews a day, the queue breaks even on about one confirmed mule a day. How much recall that takes depends on how many mules pass through the partner. That is unknown until the pilot runs.
+- **The current design is about 7× short at a realistic fraud rate.** A queue cut at a threshold would not pay. A review budget filled from the top of the ranking has a better chance, because precision is highest at the top (100% at the top 10 on the synthetic test days). Only the pilot can measure that precision on real traffic.
+- **The money that holds can stop matters most.** At a 5% stop share, break-even roughly triples. Faster analyst confirmation and bank-side freezes move this input more than any model change.
+- **Who benefits is not who pays.** Most of the value goes to victims and banks, not to the aggregator, because UPI P2P and small-merchant payments carry no merchant fee. An aggregator's case rests on regulatory exposure and partner trust as much as on this sum.
+
+**Implication for the pilot.** Add one economic mark to the pre-registered ones: **precision within the daily budget ≥ 6%**, the 90th-percentile break-even. Below about 2.7%, the queue costs more than it saves in most cases.
+
+## 8. On data this project did not generate
+
+**On Elliptic, real Bitcoin data with a temporal split, the graph model failed all three pre-registered marks.** A Random Forest on each transaction's own features beat it clearly. The protocol, `EXTERNAL_PROTOCOL.md` (SHA-256 `f60b7518…`), was written before either dataset was opened. It tests the objection that the rules and data share an author, using data made by others. Measured by `python -m infra.external_elliptic` (`external_elliptic.json`).
+
+**The IBM AML half of the protocol was not run.** On a laptop CPU, one GINe epoch on HI-Small's 5 million transfers ran for more than 2 hours without finishing, and the run was stopped by decision. So marks I1–I3 have no result. They are not dropped; they wait for a GPU run under the same protocol.
+
+### 8.1 Elliptic (real, labelled Bitcoin transactions)
+
+[Weber et al. 2019](https://arxiv.org/abs/1908.02591): 203,769 transactions, 234,355 payment flows and 49 time steps. 4,545 transactions are labelled illicit and 42,019 licit; the rest are unknown. Models fit on steps 1–29, the threshold is picked on steps 30–34, and the test is steps 35–49 (1,083 illicit among 16,670 labelled).
+
+**The pipeline reproduces the paper.** Fit the way the paper did (steps 1–34, threshold 0.5), the Random Forest scores illicit F1 0.771 on local features and 0.800 on all features. The paper reports 0.694 and 0.788.
+
+**Results, test steps 35–49, mean of 3 seeds:**
+
+| Model | Illicit F1 | Precision | Recall | Average precision |
+|---|---|---|---|---|
+| Random Forest, local features | **0.742** | 0.79 | 0.70 | 0.75 |
+| Random Forest, all features | 0.437 | 0.31 | 0.76 | 0.76 |
+| Random Forest, local + GIN embeddings | 0.556 | 0.47 | 0.69 | 0.63 |
+| GIN (this project's GNN family) | 0.323 | 0.24 | 0.52 | 0.26 |
+| GIN + hop-from-flagged rule | 0.280 | 0.19 | 0.57 | 0.26 |
+
+**Pre-registered marks:**
+
+| ID | Claim | Needed | Result | |
+|---|---|---|---|---|
+| E1 | The GNN matches published graph models | F1 ≥ 0.628 | 0.323 | **Fail** |
+| E2 | The graph adds value beyond node features | +0.02 in all seeds | −0.186 | **Fail** |
+| E3 | The hop rule adds recall at usable precision | +0.05 recall, precision ≥ 0.50 | +0.051 recall, precision 0.19 | **Fail** |
+
+**What the failures say:**
+- **The GIN ranks worse, not just at a bad threshold.** Its average precision is 0.26, against 0.75 for the Random Forest. Its embeddings also made the Forest worse in every seed.
+- **The hop rule's extra alerts are mostly wrong.** Of the transactions it adds beyond the GIN, 4–8% are illicit.
+- **Every model collapses after step 43,** when a dark market shut down, as the paper found. Before step 43 the Random Forest scores F1 0.83–0.86; from step 43 on, every model is below 0.06. Labels shifting under a model is the drift the pilot's weekly monitor is for.
+- **A threshold picked on earlier data can be badly off.** The all-features Forest ranks as well as the local one (average precision 0.76 against 0.75). But its threshold, picked on steps 30–34, was 0.26–0.28, and its F1 fell to 0.44. At the paper's fixed 0.5 the same model scores 0.80.
+
+**Limits of this test:**
+- **The GIN is the pre-registered one, not a tuned one:** 2 layers, 300 epochs at most, with the illicit weight picked on steps 30–34. The paper's GCN trained for 1,000 epochs, and a better-tuned GNN might reach its 0.628. Trying that now would mean tuning after seeing the test, so it needs a new protocol.
+- **Elliptic has no amounts or account identities.** So only the hop rule could be transplanted, and the amount and window rules are untested here.
+
+**What it means for the pitch.** On real data, the graph model is not the strong part; features and a simple tree model are. That matches the synthetic ablation (section 3.1), where rules led and the GNN supported. The pitch should lead with rules, features and the hold policy. The GNN stays a secondary signal until it beats a feature model on real traffic.
