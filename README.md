@@ -1,188 +1,59 @@
-# Operation Nolambur
-### *Turning the Golden Hour into a Golden Second*
+# Trustify
 
-> A real-time UPI fraud detection system built to stop digital arrest scams — modelled on the Nolambur, Chennai incident where ₹22.5L was siphoned across 40+ mule accounts in minutes.
+**A risk layer for a payment aggregator: rules, a graph model and graded holds that stop UPI mule chains. Each claim is tested, including where it fails.**
 
----
+[Live demo](https://vict.onrender.com) · [Evidence report](Multi-GNN/reports/README.md) · codename *Operation Nolambur*
 
-## Motto
+> Results come from synthetic data plus one real dataset (Elliptic). None come from live UPI traffic. That needs a shadow pilot.
 
-**"don't chase fraud. predict it."**
+## What it does
 
-While traditional systems react to blacklists, Operation Nolambur detects *behavioral intent* — the rhythm of money movement, not just the accounts it touches.
-
----
-
-## The Problem
-
-On a single morning in Nolambur, Chennai, a resident was held under a fake CBI "digital arrest" via video call. Under duress, they transferred ₹22.5L in ₹5L–₹5.5L bursts to avoid low-value triggers. The money hit 8 Layer-1 mule accounts in Haridwar and Rajasthan, then fanned out to 35 Layer-2 cashout accounts — all within 4 hours.
-
-By the time Tamil Nadu Cyber Cell could coordinate freeze requests across state lines, most of the money was gone.
-
-**₹22,495 Crore** is lost to cyber fraud annually in India. 9% of that comes from Digital Arrest scams alone.
-
----
-
-## What I Built
-
-A risk engine for UPI mule networks: rules, a graph model and graded holds that stop a scam campaign's later instalments and onward transfers, plus merchant-side rules for a payment aggregator. Measured on synthetic data; see `Multi-GNN/reports/README.md` for ranges and limits.
-
-```
-Victim transfer → T-GNN flags L1 mule (< 1s) → Predicts L2 accounts → Pre-freeze signal
-```
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Next.js Dashboard                        │
-│  Command Center · Cluster Graph · Drill-down · Timeline      │
-└────────────────────┬────────────────────────────────────────┘
-                     │ REST + SSE
-┌────────────────────▼────────────────────────────────────────┐
-│                   FastAPI Inference Layer                     │
-│         /score  /stream  /graph  /freeze  /report            │
-└──────┬─────────────────────────────┬──────────────────────--─┘
-       │                             │
-┌──────▼──────┐             ┌────────▼────────┐
-│  T-GNN Model│             │   Neo4j Graph DB │
-│  GIN arch.  │             │   515K nodes     │
-│  PyTorch    │             │   5M+ edges      │
-└─────────────┘             └─────────────────┘
-```
-
----
-
-## The ML Pipeline
-
-### Stage 1 — Pretrain on IBM AML (HI-Small)
-The model learns universal money-laundering graph topology: Fan-In patterns, Fan-Out layering, high in-degree → instant out-degree. 5 epochs on 5M transactions, ~18 minutes.
-
-| Metric | Value |
+| | |
 |---|---|
-| Dataset | IBM AML HI-Small |
-| Transactions | 5,078,345 |
-| Nodes | 515,088 |
-| Illicit ratio | 0.10% |
-| Architecture | GIN (Graph Isomorphism Network) |
-| Best Val F1 | 0.0764 |
+| **Detect mules (P2P)** | Four rule detectors (new-payer bursts, rapid pass-through, splitting under the UPI cap, money from a flagged account), plus leads from a GIN graph model |
+| **Act in steps** | Delay settlement, hold outbound, full hold. Holds expire on their own; an appeal not decided in 24 h releases the account |
+| **Merchant side (P2M)** | Hold the settlement of fake merchants; send shared settlement accounts to review |
+| **Case work** | Cases, evidence packs, 1930 reports (sandboxed), role-based access, hash-chained audit trail |
 
-### Stage 2 — Fine-tune on Nolambur Synthetic Data
-A synthetic dataset generated to match the exact Nolambur case pattern: ₹5L–₹5.5L burst transfers, Tamil Nadu victims, Haridwar/Rajasthan mule accounts, sub-90-second cashout velocity.
+## What the evidence says
 
-| Metric | Value |
+| Test | Result |
 |---|---|
-| Victims | 50 Chennai accounts |
-| L1 Mules | 80 (Haridwar / Rajasthan) |
-| L2 Cashout | 300 (Delhi / Haryana) |
-| Transactions | ~30,400 |
-| Illicit ratio | ~1.3% |
-| Best Val F1 | 0.0667 |
+| Held-out synthetic days (rules + model) | 58–77% of mules caught, 58–78% of alerts are mules, 17 s – 4 h of warning |
+| Fake merchants (synthetic) | All flagged before their first settlement; 63–68% of their money held |
+| **Real data: Elliptic Bitcoin, temporal split** | **The graph model failed all 3 pre-registered marks.** A Random Forest on each transaction's features scored F1 0.74; the GIN 0.32 |
+| **Break-even, from reported Indian figures** | **The queue pays only above ~2.7% precision (6% for 90% confidence).** At the real UPI fraud rate the projected precision is 0.4% |
+| Throughput (laptop) | 4,900–6,150 payments a second, scored 0.3–0.7 s after arrival |
 
-> **Note:** F1 is low — this is expected at 5–10 epochs with 0.1% class imbalance and no real UPI ground-truth data. The model detects the structural pattern. Improving to F1 > 0.30 requires 30+ epochs, loss weight tuning to `[1.0, 300.0]`, and explicit geo-mismatch node features.
+**So the case is narrower than "a GNN catches mules".** Rules, features and the hold policy do the work, and the graph model is a secondary signal. A pilot passes only if precision within the daily review budget clears break-even.
 
----
+Every test was pre-registered: its protocol was written down before the data it was judged on. Failures are published: rules r2.2 missed its marks, and so did the GIN on Elliptic.
 
-## The "Mule Pulse" Signal
+## How it is built
 
-The core innovation. For each account, we compute:
+```
+payments (webhook | Kafka | Kinesis | replay)
+  → rail engine: rules + GIN scorer (2-hop, time-respecting) → decision router → holds
+  → outbox: gateway, 1930, SMS (sandbox) · store: SQLite/Postgres · graph: memory/Neo4j
+  → Next.js console (thin proxy, no browser-side data)
+```
 
-- **In-degree velocity** — how many sources sent money in the last 3 minutes
-- **Out-degree velocity** — time between first receipt and first withdrawal
-- **Geo-mismatch score** — IP/device state vs. registered account state
-- **Amount clustering** — are transfers suspiciously close to ₹5L?
+Scoring runs off the payment path. An inline gate inside the path is designed but not built.
 
-A genuine mule account scores high on all four simultaneously. A normal account almost never does.
-
----
-
-## The Nolambur Synthetic Data Generator
-
-`nolambur_synthetic_gen.py` generates a UPI-flavoured fraud dataset modelled on the exact case:
+## Run it
 
 ```bash
-python nolambur_synthetic_gen.py
-# Output:
-# nolambur_transactions.csv  — UPI-format transactions with VPA, ₹ amounts, state codes
-# nolambur_labels.csv        — ground truth is_mule per account
-# nolambur_stats.json        — summary stats
+cd Multi-GNN && RAIL_SOURCE=replay python bridge_api.py   # :8001, ready in about a minute
+pnpm install && pnpm dev                                  # :3000
+python -m pytest Multi-GNN/tests                          # tests
 ```
 
----
+Settings: `RAIL_SOURCE` (webhook, replay, kafka, kinesis) · `RAIL_GRAPH` (memory, neo4j) · `RAIL_DB_URL` (SQLite or Postgres) · `RAIL_RULES` (r2.0, r2.1) · `RAIL_AUTO_HOLD` (on, off).
 
-## Tech Stack
+Stack: PyTorch Geometric, FastAPI, SQLAlchemy, Next.js, Tailwind, d3, hosted on Render.
 
-| Layer | Technology |
-|---|---|
-| Graph Database | Neo4j 5.x + Cypher |
-| ML Framework | PyTorch + PyTorch Geometric (TGN / GIN) |
-| Experiment Tracking | Weights & Biases |
-| Inference API | FastAPI + Uvicorn |
-| Real-time streaming | Server-Sent Events (SSE) |
-| Frontend | Next.js 14 (App Router) |
-| Graph visualisation | react-force-graph |
-| State management | Zustand |
-| UI components | shadcn/ui + Tailwind CSS |
-| Map | Leaflet.js |
-| Training environment | Google Colab (T4 GPU) |
+## Next
 
----
-
-## Merchant Risk Console
-
-The web app is a risk console for a payment aggregator, driven entirely by the Python backend.
-`Multi-GNN/rail_engine.py` replays `nolambur_transactions.csv` in timestamp order, attaches the GIN
-checkpoint's score to every row, runs four detectors, and serves `/rail/*` on the GNN bridge. Analyst
-actions go through `agents/tools_impl.py` and land in `agents/action_log.jsonl`.
-
-```bash
-cd Multi-GNN && python bridge_api.py   # :8001, ~30 s to score the graph on CPU
-npm run dev                            # the console proxies /api/rail/* to the bridge
-```
-
-| Page | What it does |
-|---|---|
-| **Alert queue** `/console` | Replay controls, live metrics, ranked alerts with money trail, evidence rows (CSV row + GNN score), agent investigation, clear / escalate / freeze |
-| **Onboarding check** `/onboarding` | Checks a merchant's settlement VPAs for direct or second-hop links to flagged accounts |
-| **Cases** `/cases` | Evidence pack per case; files a 1930 report and notifies an officer through the agent tools |
-| **Model & evaluation** `/model` | Training log, held-out test result, score distributions, rules vs model against the labels, and why the numbers are high |
-
-Measured on the full dataset (account level, labels never read by the detectors): rules alone reach
-60% recall at 87% precision; adding the model's leads reaches 85% recall at 87% precision. The median
-alert fires 2m 33s before the mule forwards the money.
-
----
-
-## Roadmap
-
-- [x] IBM AML preprocessing pipeline
-- [x] Nolambur synthetic data generator
-- [x] T-GNN pretrain (IBM HI-Small)
-- [x] Fine-tune on Nolambur data
-- [x] FastAPI inference endpoints
-- [x] Next.js dashboard (hero UI)
-- [ ] Improve F1 → target 0.30+ (30 epochs, loss weight 300, geo features)
-- [ ] Neo4j ingestion pipeline
-- [ ] Live SSE alert feed
-- [ ] ZKP inter-state freeze bridge (Circom / SnarkyJS)
-- [ ] Edge Biometric AI — duress detection (TensorFlow Lite)
-- [ ] 1930 CFCFRMS auto-report API integration
-
----
-
-## Dataset Sources
-
-- **IBM AML Dataset** — Synthetic AML transactions with ground-truth mule chain labels. [Kaggle](https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml)
-- **Nolambur Synthetic Data** — Generated by this project to model the exact ₹5L burst pattern, Tamil Nadu → Haridwar/Rajasthan geography, and sub-90s cashout velocity.
-
----
-
----
-
-## The Vision
-
-> India loses ₹22,495 Crore to cyber fraud every year.  
-> Every second a mule account sits unfrozen is money gone forever.  
-> Operation Nolambur exists to make that second count.
-
-*Built with purpose. Deployed for justice.*
+1. A 30-day shadow pilot on one partner's anonymised flows. It passes only on precision within the review budget, recall and lead time, against marks fixed in advance.
+2. The IBM AML half of the external test, which needs a GPU.
+3. Drift monitoring. Elliptic showed every model collapsing when a dark market shut down.
